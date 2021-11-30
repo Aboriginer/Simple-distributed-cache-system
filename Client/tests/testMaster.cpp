@@ -1,9 +1,11 @@
-#include <iostream>
-#include <sys/socket.h>
 #include <arpa/inet.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <cstring>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <iostream>
+
 
 #define BUF_SIZE 0xFFFF
 #define MASTER_PORT 8889
@@ -18,21 +20,18 @@ int main(int argc, char *argv[])
 
     int listener = 0;
     listener = socket(PF_INET, SOCK_STREAM, 0);
-    if (listener < 0)
-    {
+    if (listener < 0) {
         perror("listener");
         exit(-1);
     }
 
-    if (bind(listener, (struct sockaddr *)&master_addr, sizeof(master_addr)) < 0)
-    {
+    if (bind(listener, (struct sockaddr *)&master_addr, sizeof(master_addr)) < 0) {
         perror("bind error");
         exit(-1);
     }
 
     int ret = listen(listener, 5);
-    if (ret < 0)
-    {
+    if (ret < 0) {
         perror("listen error");
         exit(-1);
     }
@@ -52,8 +51,7 @@ int main(int argc, char *argv[])
     bzero(recv_buff, BUF_SIZE);
     bzero(send_buff, BUF_SIZE);
 
-    while (true)
-    {
+    while (true) {
         std::cout << "Request from client, fd = " << clientfd << std::endl;
 
         int len = recv(clientfd, recv_buff, BUF_SIZE, 0);

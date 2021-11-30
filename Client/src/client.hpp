@@ -1,17 +1,19 @@
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 
-#include "lru.hpp"
-#include <string>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <sys/epoll.h>
-#include <fcntl.h>
-#include <iostream>
-#include "RandString.hpp"
-#include <unistd.h>
 #include <cstring>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <iostream>
+#include <string>
+
+#include "lru.hpp"
+#include "rand_string.hpp"
 
 // 缓冲区大小65535
 #define BUF_SIZE 0xFFFF
@@ -22,7 +24,6 @@
 // 服务器端口号
 #define MASTER_PORT 8889
 #define CACHESEVER_PORT 8887
-
 
 #define KEY_LENGTH 3
 #define VALUE_LENGTH 10

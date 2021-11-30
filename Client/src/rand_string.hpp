@@ -1,11 +1,9 @@
 #ifndef RANDSTRING_HPP
 #define RANDSTRING_HPP
 
-#include <string>
 #include <random>
-
+#include <string>
 
 std::string strRand(int length);
-
 
 #endif

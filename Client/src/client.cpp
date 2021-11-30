@@ -1,4 +1,4 @@
-#include "Client.hpp"
+#include "client.hpp"
 
 Client::Client(int cache_size_local) {
 	cache_size_local_ = cache_size_local;
@@ -61,20 +61,6 @@ void Client::Read() {
 			//写入本地缓存
 			cache_lru->put(key, recv_buff);
 		}
-
-		// //向master请求分布
-		// strcpy(send_buff, key.data());
-		// send(master_sock, send_buff, BUF_SIZE, 0);
-		// recv(master_sock, recv_buff, BUF_SIZE, 0);
-
-		// std::cout << "Key: " << key << "   "
-		// 					<< "CacheSever IP: "
-		// 					<< recv_buff << std::endl;
-
-		// //TODO: 解析recv_buff
-		// cache_sever_addr.sin_addr.s_addr = inet_addr(recv_buff);  //"127.0.0.1"
-		// //写入本地缓存
-		// cache_lru->put(key, recv_buff);
 
 		if ((cache_sever_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
 			fprintf(stderr, "Socket Error is %s\n", strerror(errno));
