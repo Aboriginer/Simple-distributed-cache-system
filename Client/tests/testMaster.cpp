@@ -58,8 +58,9 @@ int main(int argc, char *argv[])
 
         std::cout << "Key: " << recv_buff << "   Return CacheSever IP: "
                   << "127.0.0.1" << std::endl;
+        std::string temp = recv_buff;
 
-        strcpy(send_buff, "127.0.0.1");  //CacheSever IP
+        strcpy(send_buff, (temp + "#127.0.0.1").data());  //CacheSever IP
         send(clientfd, send_buff, BUF_SIZE, 0);
 
         memset(recv_buff, 0, sizeof(recv_buff));

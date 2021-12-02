@@ -1,6 +1,9 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 
+#include <iostream>
+#include <sstream>
+
 #include "rand_string.hpp"
 
 std::string strRand(int length)
@@ -38,4 +41,15 @@ void addfd(int epollfd, int fd, bool enable_et)
   //eg. 在recv(fd...)时，该函数立刻返回，在返回时，内核数据还没准备好会返回WSAEWOULDBLOCK错误代码
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFD, 0) | O_NONBLOCK);
   printf("fd added to epoll!\n\n");
+}
+
+void split(const std::string& s,std::vector<std::string>& sv,const char flag) {
+    sv.clear();
+    std::istringstream iss(s);
+    std::string temp;
+
+    while (getline(iss, temp, flag)) {
+        sv.push_back(temp);
+    }
+    return;
 }

@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
                 break;
         }
     }
-
+    //TODO：读取config文件
     Client client(local_cache_capacity, mode);
     client.Start();
 }

@@ -11,6 +11,7 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include "lru.hpp"
 #include "rand_string.hpp"
@@ -50,6 +51,9 @@ public:
     //连接master
     void connect_master();
 
+    //检查cache_server的请求是否收到回复，主动发现cache_server宕机
+    void check_cache_server_request();
+
 private:
     //client模式 -w write；-r read
     char mode_;
@@ -59,6 +63,15 @@ private:
 
     int master_sock;
     int cache_sever_sock;
+
+    // 创建管道，其中fd[0]用于父进程随机生成key，检查本地cache后将key发送给子进程
+    // fd[1]用于子进程接受父进程key
+    int pipe_fd_[2];
+
+    int pid;  //当前进程ID
+
+    //进程间通信缓冲区
+    char message[BUF_SIZE];
 
     struct sockaddr_in master_addr;
     struct sockaddr_in cache_sever_addr;
@@ -76,6 +89,9 @@ private:
 
     //本地Cache缓存
     cache::lru_cache<std::string, std::string>* cache_lru;
+
+    //管理向cache_server发送的请求,ip-num
+    std::unordered_map<std::string, int> cache_server_request_;
 };
 
 #endif
