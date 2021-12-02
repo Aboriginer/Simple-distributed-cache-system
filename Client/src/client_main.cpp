@@ -40,11 +40,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    Client client(local_cache_capacity);
+    Client client(local_cache_capacity, mode);
     client.Start();
-    if (mode == 'w') {
-        client.Write();
-    } else if (mode == 'r'){
-        client.Read();
-    }
 }

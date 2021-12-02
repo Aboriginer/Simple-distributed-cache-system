@@ -28,12 +28,15 @@
 #define KEY_LENGTH 3
 #define VALUE_LENGTH 10
 
+const int MAX_EVENT_NUMBER = 10000; //最大事件数
+
+const int EPOLL_SIZE = 10;  // epoll支持的最大句柄数
 
 class Client {
 
 public:
     // 有参构造
-    Client(int cache_size_local);
+    Client(int cache_size_local, char mode);
 
     // 启动客户端
     void Start();
@@ -44,7 +47,15 @@ public:
     //以稳定的压力持续写入缓存系统
     void Write();
 
+    //连接master
+    void connect_master();
+
 private:
+    //client模式 -w write；-r read
+    char mode_;
+
+    epoll_event events[MAX_EVENT_NUMBER];
+    int epollfd_;
 
     int master_sock;
     int cache_sever_sock;

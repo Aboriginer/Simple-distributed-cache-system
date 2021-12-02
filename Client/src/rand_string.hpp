@@ -6,4 +6,6 @@
 
 std::string strRand(int length);
 
+void addfd(int epollfd, int fd, bool enable_et);
+
 #endif

@@ -1,6 +1,8 @@
 #include "client.hpp"
 
-Client::Client(int cache_size_local) {
+Client::Client(int cache_size_local,char mode) {
+	mode_ = mode;
+	
 	cache_size_local_ = cache_size_local;
 	cache_lru = new cache::lru_cache<std::string, std::string>(cache_size_local_);
 
@@ -18,7 +20,7 @@ Client::Client(int cache_size_local) {
 	cache_sever_sock = 0;
 }
 
-void Client::Start() {
+void Client::connect_master() {
 	if ((master_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
 		fprintf(stderr, "Socket Error is %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
@@ -32,7 +34,19 @@ void Client::Start() {
 	}
 }
 
+void Client::Start() {
+	epollfd_ = epoll_create(EPOLL_SIZE);
+	connect_master();
+	if (mode_ == 'w') {
+        Write();
+    } else if (mode_ == 'r'){
+        Read();
+    }
+}
+
 void Client::Read() {
+	//TODO: 写入重要日志
+
 	//TODO: 读取keylist文件
 	std::string key = strRand(KEY_LENGTH);
 	std::string cache_server_ip = "";
