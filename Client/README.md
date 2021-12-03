@@ -16,11 +16,11 @@ testMaster和testCacheServer无参数；Client -c 指定本地cache容量，-w/-
 
 发送：key
 
-接收：ip:port#状态#key#value
+接收：ip:port#state#key#value
 
 ### 与master通信格式
 
-发送：key#REQUEST
+发送：key
 
 接收：key#ip:port
 
