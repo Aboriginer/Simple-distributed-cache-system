@@ -80,7 +80,7 @@ public:
                     before_task_hook();
                 }
                 
-                
+                std::cout << "running" << std::endl;
                 task();
 
                 {
@@ -121,7 +121,7 @@ public:
          typename Rtrn = typename std::result_of<Func(Args...)>::type>
     auto enqueue(Func && func, Args &&...args) -> std::future<Rtrn> {
             auto task = taskBuilder(func, args...);
-            auto future = task.get_future();
+            auto future = task.get_future());
             auto task_ptr = std::make_shared<decltype(task)> (move(task));
 
             
@@ -129,19 +129,16 @@ public:
             if (isPoolStoped) {
                 throw std::runtime_error("enqueue on stopped ThreadPool");
                 }
-                    auto payload = [task_ptr] () -> void {
-                        task_ptr ->operator()();
-                    } ;
+            auto payload = [task_ptr] () -> void {
+                 task_ptr ->operator()();
+            } ;
 
-                    tasks.emplace(payload);
-            
-
-                __cv.notify_one();
-                return future;
+            tasks.emplace(payload);
+            __cv.notify_one();
+            return future;
             }
 
-        
-
+  
 
     
 };

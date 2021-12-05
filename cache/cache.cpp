@@ -3,9 +3,12 @@
 //
 
 #include "cache.h"
+#include <sys/ipc.h>
+#include <sys/shm.h>
 
 Cache::Cache(int cache_size_local) {
     cache_size_local_ = cache_size_local;
+    message_to_client = "";
 }
 
 void Cache::Start() {
@@ -58,12 +61,42 @@ void Cache::Heartbeat() {
 }
 
 void Cache::Client_chat() {
+    //线程池
+    ThreadPool TP(MAX_THREADS_NUMBER);
+    std::string buffer;
+    std::queue<std::future<int>> future_queue;
+    //LRU缓存
+    LRU_Cache<std::string, std::string> MainCache(LRU_CAPACITY);
     int serv_client_sock;
     struct sockaddr_in serv_client_addr;
     // 向client发送的数据
     char send_buff_client[BUF_SIZE];
     // client返回的数据
     char recv_buff_client[BUF_SIZE];
+
+    //处理client的请i去的任务函数。
+    auto LRU_handle_task = [&](std::string message, int targetPort) ->int {
+        //分割协议报文
+        std::vector<std::string> tmp = split(message, "#");
+        
+        if(tmp.size() == 1){
+            //client要求读出值
+            std::string key = tmp[0];
+            std::string res;
+            res = MainCache.get(key);
+            buffer = res;
+            return targetPort;
+        }else if(tmp.size() > 1){
+            //client要求写入值
+            MainCache.put(tmp[0],tmp[1]);
+            buffer = "write success";
+            return targetPort;
+        }else{
+            //空的请求
+            buffer = "empty request.";
+            return targetPort;
+        }
+    };
 
     bzero(&serv_client_addr, sizeof(serv_client_addr));
 
@@ -98,6 +131,8 @@ void Cache::Client_chat() {
     }
     // 往事件表中添加监听事件
     addfd(epfd, serv_client_sock, true);
+    // 开辟共享内存 
+    
 
     while (true) {
         // epoll_events_count表示就绪事件数目
@@ -127,18 +162,33 @@ void Cache::Client_chat() {
                 if (pch == nullptr) { // 读请求
                     // TODO:LRU
                     std::cout << "Read from cache LRU to client:" << send_buff_client << std::endl;
-                    send(client_events[i].data.fd, send_buff_client, BUF_SIZE, 0);
+                    
+                    int targetPort = future_queue.front().get();
+                    memcpy(send_buff_client, &buffer, buffer.size());
+                    //由于任务队列是异步执行的，所以不确定谁的请求会被首先解决出来。
+                    //因此采用了记录targetPort的方法来让请求和答复一一对应。
+                    send(client_events[targetPort].data.fd, send_buff_client, BUF_SIZE, 0);
                     // TODO:写个队列
                     bzero(send_buff_client, BUF_SIZE);
+                    future_queue.pop();
                     // TODO:移除事件
                     // TODO:返回给client的信息ip:port#state#key
                 }   else {  // 写请求
                     std::cout << "Write from client to cache LRU:" << recv_buff_client << std::endl;
                     // TODO:LRU
+                    //?? : 在这里我们可能需要事先分辨client的请求究竟是读还是写。
+                    auto future = TP.enqueue(LRU_handle_task, recv_buff_client, i);
                     std::cout << "write successfully" << std::endl;
+                    future_queue.emplace(future);
                     // TODO:移除事件
                     // TODO:client直接退出会导致cache server退出
+                    // 在这里，我的建议是，让client推出前发送一个“告别信息”，通知cache把对应的fd关掉。
                 }
+
+                //处理请求并通过端口进行回复
+                //函数将会返回发出请求的客户端主机号
+                
+                //TODO : 在本地调试下似乎出现了线程竞跑的问题，尚不明确其中原因。
             }
         }
     }
