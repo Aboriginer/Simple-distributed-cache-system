@@ -3,8 +3,6 @@
 //
 
 #include "cache.h"
-#include <sys/ipc.h>
-#include <sys/shm.h>
 
 Cache::Cache(int cache_size_local) {
     cache_size_local_ = cache_size_local;
@@ -74,7 +72,7 @@ void Cache::Client_chat() {
     // client返回的数据
     char recv_buff_client[BUF_SIZE];
 
-    //处理client的请i去的任务函数。
+    //处理client的需求的任务函数。
     auto LRU_handle_task = [&](std::string message, int targetPort) ->int {
         //分割协议报文
         std::vector<std::string> tmp = split(message, "#");
@@ -168,7 +166,7 @@ void Cache::Client_chat() {
                     //由于任务队列是异步执行的，所以不确定谁的请求会被首先解决出来。
                     //因此采用了记录targetPort的方法来让请求和答复一一对应。
                     send(client_events[targetPort].data.fd, send_buff_client, BUF_SIZE, 0);
-                    // TODO:写个队列
+                    // --TODO:写个队列
                     bzero(send_buff_client, BUF_SIZE);
                     future_queue.pop();
                     // TODO:移除事件
