@@ -4,7 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <cstring>
-#include "RandString.hpp"
+#include "rand_string.hpp"
 
 #define BUF_SIZE 0xFFFF
 #define CACHE_SEVER_PORT 8887
@@ -58,12 +58,12 @@ int main(int argc, char *argv[])
 
         std::string return_value = strRand(10);
 
-        std::cout << "Key: " << recv_buff << "   Return Value: "
-                  << return_value << std::endl;
+        std::cout << "Recv: " << recv_buff << "   Return: 127.0.0.1#SUCCESS#KEY" << std::endl;
 
-        //无论读写均返回随机字符串，仅作测试通信用
-        strcpy(send_buff, return_value.data());
-        send(clientfd, send_buff, BUF_SIZE, 0);
+        //仅作测试通信用
+        // strcpy(send_buff, return_value.data());
+        // send(clientfd, send_buff, BUF_SIZE, 0);
+        send(clientfd, "127.0.0.1#SUCCESS#KEY", BUF_SIZE, 0);
 
         memset(recv_buff, 0, sizeof(recv_buff));
         memset(send_buff, 0, sizeof(recv_buff));

@@ -1,33 +1,28 @@
 #include <getopt.h>
 
-#include "lru.hpp"
-#include "Client.hpp"
+#include "client.hpp"
 
-int main(int argc, char *argv[])
-{
+
+int main(int argc, char *argv[]) {
     int local_cache_capacity = 0;  //本地cache容量
     char mode;
 
     int c;
 
-    static struct option long_options[] =
-    {
+    static struct option long_options[] = {
         {"capacity", required_argument,NULL,'c'},
         {"write",    no_argument,      NULL,'w'},
         {"read",     no_argument,      NULL,'r'}
     };
 
-    while(1)
-    {
+    while(1) {
         int opt_index = 0;
         c = getopt_long(argc, argv,"c:wr", long_options,&opt_index);
 
-        if(-1 == c)
-        {
+        if(-1 == c) {
             break;
         }
-        switch(c)
-        {
+        switch(c) {
             case 'c':
                 local_cache_capacity = atoi(optarg);
                 break;
@@ -44,12 +39,7 @@ int main(int argc, char *argv[])
                 break;
         }
     }
-
-    Client client(local_cache_capacity);
+    //TODO：读取config文件
+    Client client(local_cache_capacity, mode);
     client.Start();
-    if (mode == 'w') {
-        client.Write();
-    } else if (mode == 'r'){
-        client.Read();
-    }
 }
