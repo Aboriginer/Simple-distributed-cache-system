@@ -136,29 +136,32 @@ void Client::dealwith_child(const char* message) {
 }
 
 void Client::dealwith_master(const char* message) {
+	// message example: SUCCESS#key#ip:port / FAILED#key
 	std::vector<std::string> message_array;
 	split(message, message_array, '#');
-	// message example: "KEY#ip:port"
-	std::string& key = message_array[0];
-	std::string& addr = message_array[1];
-
-	cache_lru->put(key, addr);  //更新本地cache
-
-	if (mode_ == 'r') {
-		send_request_to_cache_server(addr, key);
-	} else if (mode_ == 'w') {
-		send_request_to_cache_server(addr, key, strRand(20));
+	std::string& state = message_array[0];
+	std::string& key = message_array[1];
+	
+	if(state == "SUCCESS") {
+		std::string& addr = message_array[2];
+		cache_lru->put(key, addr);  //更新本地cache
+		if (mode_ == 'r') {
+			send_request_to_cache_server(addr, key);
+		} else if (mode_ == 'w') {
+			send_request_to_cache_server(addr, key, strRand(20));
+		}
+	} else if (state == "FAILED") {
+		LOG(INFO) << "Request to master failed, key: " + key;
 	}
 }
 
 void Client::dealwith_cache_server(const char* message) {
-	// message example: ip:port#state#key(#value)
+	// message example: SUCCESS/FAILED#key#ip:port
 	std::vector<std::string> message_array;
 	split(message, message_array, '#');
-	std::string& addr = message_array[0];
-	std::string& state = message_array[1];
-	std::string& key = message_array[2];
-	
+	std::string& state = message_array[0];
+	std::string& key = message_array[1];
+	std::string& addr = message_array[2];
 	if(state == "SUCCESS") {
 		erase_item_from_request_map(addr, key);
 		std::cout << "Request succeed. key = " + key 

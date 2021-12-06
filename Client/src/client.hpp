@@ -80,7 +80,7 @@ private:
 
 	int pid;  //当前进程ID
 
-	//进程间通信缓冲区
+	//通信缓冲区
 	char message[BUF_SIZE];
 
 	struct sockaddr_in master_addr;
