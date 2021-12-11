@@ -13,17 +13,17 @@ testMaster无参数，testClient需指定1.主从地位，2.本地IP, 3.给clien
 
 接收：key#value
 
-发送(TODO)：ip:port#state#key(port为监听端口，state = SUCCESS/FAILED)
+发送：state#key#ip:port(port为监听端口，state = SUCCESS/FAILED)
 
 ### client写请求
 
 接收：key
 
-发送(TODO)：ip:port#state#key#value
+发送：key#value
 
 ## 与master通信格式
 
-发送：心跳 + ip/port + time(TODO)
+发送：x#ip:port#status
 
-接收(TODO)：扩缩容信息
+接收：P/R#ip1#port1#Y#ip2#port2#key#key#key···
 
