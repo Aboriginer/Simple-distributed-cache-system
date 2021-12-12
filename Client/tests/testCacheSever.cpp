@@ -26,6 +26,12 @@ int main(int argc, char *argv[])
 		exit(-1);
 	}
 
+	int val = 1;
+	if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(int)) < 0) {
+		std::cout << "setsockopt error" << std::endl;
+		exit(1);
+	}
+
 	if (bind(listener, (struct sockaddr *)&cache_sever_addr, sizeof(cache_sever_addr)) < 0)
 	{
 		perror("bind error");

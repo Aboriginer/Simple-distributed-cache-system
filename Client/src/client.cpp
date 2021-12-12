@@ -31,7 +31,8 @@ void Client::init() {
 	}
 	connect_master();
 
-	addfd(epollfd_, master_sock, true);
+	// addfd(epollfd_, master_sock, true);
+	addfd(epollfd_, master_sock, false);
 	addfd(epollfd_, pipe_fd_[0], true);
 
 	master_timer = new Timer(WAITING_TIME, false, NULL, (void*)&master_massage);
@@ -156,6 +157,7 @@ void Client::send_request_to_master(const std::string my_addr,
 void Client::send_request_to_cache_server(const std::string addr,
 																					const std::string key, 
 																					const std::string value) {
+
 	add_item_to_request_map(addr, key);
 
 	parse_str_addr(addr, cache_sever_addr);
@@ -169,6 +171,7 @@ void Client::send_request_to_cache_server(const std::string addr,
 						(struct sockaddr *)(&cache_sever_addr),
 						sizeof(struct sockaddr)) == -1) {
 		LOG(ERROR) << "Connect cache server failed, addr: " + addr;
+		close(cache_sever_sock);
 	} else {
 		send(cache_sever_sock, send_tmp.data(), send_tmp.size(), 0);
 		addfd(epollfd_, cache_sever_sock, true);
@@ -203,6 +206,7 @@ void Client::dealwith_child(const char* message) {
 		try {
 			cache_server_addr = cache_lru->get(key);
 			// 本地cache中有key-addr,向cache server发送读写请求
+			
 			if (mode_ == 'r') {
 				send_request_to_cache_server(cache_server_addr, key);
 			} else if (mode_ == 'w') {
@@ -217,6 +221,7 @@ void Client::dealwith_child(const char* message) {
 }
 
 void Client::dealwith_master(const char* message) {
+	std::cout << message << std::endl;
 	master_timer->stop();
 	// message example: SUCCESS#key#ip:port / FAILED#key
 	std::vector<std::string> message_array;
@@ -226,7 +231,8 @@ void Client::dealwith_master(const char* message) {
 	
 	if (state == "SUCCESS") {
 		std::string& addr = message_array[2];
-		cache_lru->put(key, addr);  //更新本地cache
+		cache_lru->put(key, addr);  // 更新本地cache
+		
 		if (mode_ == 'r') {
 			send_request_to_cache_server(addr, key);
 		} else if (mode_ == 'w') {
@@ -247,7 +253,7 @@ void Client::dealwith_cache_server(const char* message) {
 	if (state == "SUCCESS" || state == "FAILED") {
 		erase_item_from_request_map(addr, key);
 		cache_server_timers[addr].timer->stop();
-		std::cout << "Request " + state + " key = " + key 
+		std::cout << "Request to cache server" + state + " key = " + key 
 							<< " addr = " + addr << std::endl;
 	}
 }
@@ -259,7 +265,7 @@ void Client::add_item_to_request_map(const std::string cache_server_addr,
 												cache_server_request_[cache_server_addr].end(), 
 												key);
 		if (it == cache_server_request_[cache_server_addr].end()) {
-			cache_server_request_[cache_server_addr].emplace_front(key);
+			cache_server_request_[cache_server_addr].emplace_back(key);
 		}
 	} else {
 		std::list<std::string> tmp {key};
