@@ -117,6 +117,7 @@ void Master::start_cache() {
 
     // 客户端列表
     std::unordered_map<int, struct fdmap *> clients_list;
+    std::vector<int> fd_node;
 
     // 主cache堆栈
     stack<int> pcache;
@@ -192,6 +193,8 @@ void Master::start_cache() {
                 //#################################################1/3
                 // 服务端用map保存用户连接，fd对应客户端套接字地址
                 struct fdmap *tmp = new fdmap(clientfd);
+                fd_node.push_back(clientfd);
+                // 还有主备份问题要改
                 clients_list[clientfd] = tmp;
                 //#################################################
                 std::cout << "Add new clientfd = " << clientfd << " to epoll" << std::endl;
