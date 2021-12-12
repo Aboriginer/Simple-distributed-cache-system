@@ -1,4 +1,4 @@
-
+#include <iostream>
 #include <unordered_map>
 #include <mutex>
 
@@ -33,9 +33,9 @@ public:
     LRU_Cache(int capacity__);//构造函数
     const T2 get(T1 key);         //获取关键字的值
     bool check(T1 key);     //查找值是否存在
-    void put(T1 key,T2 val);//变更数据值，或者插入关键字-值对。
+    T1 put(T1 key,T2 val);//变更数据值，或者插入关键字-值对。
     void del(T1 key);
-    vector<vector<T>> show_all();
+//    vector<vector<T>> show_all();
 private:
     void add2head(DNode<T1, T2> *node);
     void move2head(DNode<T1, T2> *node);
@@ -70,20 +70,21 @@ const T2 LRU_Cache<T1,T2>::get(T1 key){
     }
 }
 
-template<typename T1, typename T2>
-std::vector<std::vector<T>> show_all() {
-    std::vector<std::vector<T>> res;
-    for(auto it : map){
-        res.push_back({it.first(), it.second()});
-    }
-}
+//template<typename T1, typename T2>
+//std::vector<std::vector<>> show_all() {
+//    std::vector<std::vector<T>> res;
+//    for(auto it : map){
+//        res.push_back({it.first(), it.second()});
+//    }
+//}
 
 
 //^ 主要功能：变更或插入关键字
 template<typename T1, typename T2>
-void LRU_Cache<T1,T2>::put(T1 key, T2 val){
+T1 LRU_Cache<T1,T2>::put(T1 key, T2 val){
     //加锁
     mutex.lock();
+    T1 removed_key;
     if(map.count(key) > 0){
         //如果链表中存在key，那么则直接调出这个值，并将其移动到链表的头部
         //找出key
@@ -94,7 +95,7 @@ void LRU_Cache<T1,T2>::put(T1 key, T2 val){
         node->val = val;
         //解锁
         mutex.unlock();
-        return;
+        return removed_key;
     }else{
         DNode<T1,T2>* node = new DNode<T1,T2> (key,val);
         map[key] = node;
@@ -103,12 +104,14 @@ void LRU_Cache<T1,T2>::put(T1 key, T2 val){
         if(size > capacity){
             // 删除尾部节点
             DNode<T1,T2> *remove = remove_tail();
-            map.erase(key);
+            map.erase(remove->key);
+            removed_key = remove->key;
             delete remove;
             size --;
         }
         //解锁
         mutex.unlock();
+        return removed_key;
     }
 }
 

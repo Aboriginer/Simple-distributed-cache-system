@@ -17,10 +17,12 @@
 #include <thread>
 #include <vector>
 #include <atomic>
+#include <functional>
 //LRU链表
 #include "LRU_cache.hpp"
 //
 #include "threadPool.hpp"
+#include "Timer.hpp"
 // 缓冲区大小65535
 #define BUF_SIZE 0xFFFF
 
@@ -29,6 +31,7 @@
 #define CACHE_SERVER_IP "127.0.0.1"
 // 服务器端口号
 #define MASTER_PORT 8889
+#define MASTER_PORT_2 8890
 #define SERV_CLIENT_CACHE_SEVER_PORT 8887
 
 #define KEY_LENGTH 3
@@ -50,30 +53,26 @@ public:
     // 启动Cache
     void Start();
 
-
-    // TODO：接收master指挥的扩缩容信息
-
 private:
     int cache_size_local_;
-    std::string replicaIP;
-    int replicaPort;
-    std::atomic<int> status;                //扩缩容用到的状态
-    std::atomic<std::string> targetCacheIP;     //扩缩容时用到的另一个cache的IP
-    std::atomic<std::string> targetCachePort;    //扩缩容用到的另一个cache的端口
-    std::atomic<std::string> bufferReplica;
+    std::mutex mutex;
+    std::string replica_IP_, port_for_replica_; // primary状态用到这两个变量
+    std::string primary_IP_, port_for_primary_; // replica状态用到这两个变量
     // 向master发送心跳包
-    static void Heartbeat();
+    void Heartbeat();
     // 接收master信息
-    static void Master_chat();
+    void Master_chat();
     // 与client通信
-    static void Client_chat();
+    void Client_chat();
     // 与cache server通信
-    static void CachePass();
-    // LRU底层结构
-    static std::string message_to_client;
-    // IP port信息
-    static std::string status_, local_cache_IP_, port_for_client_, port_for_cache_;
+    void cache_pass();
+    // 容灾通信
+    void replica_chat();
 
+    // 解析字符串
+    void ReadFromMaster(std::string message);
+    // IP port信息
+    std::string status_, local_cache_IP_, port_for_client_, port_for_cache_;
 };
 
 void addfd( int epollfd, int fd, bool enable_et );

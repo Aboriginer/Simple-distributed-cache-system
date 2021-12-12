@@ -44,15 +44,15 @@ int main(int argc, char *argv[]) {
 
     while (1) {
         fputs("Input message(Q to quit): ", stdout);
-        fgets(message, BUF_SIZE, stdin);
 
-        if (!strcmp(message, "q\n") || !strcmp(message, "Q\n"))
+        std::cin.getline(message, BUF_SIZE);
+
+        if (!strcmp(message, "q") || !strcmp(message, "Q"))
             break;
 
-        message[0] = 'h';
         write(sock, message, strlen(message));
-//        str_len = read(sock, message, BUF_SIZE - 1);
-//        message[str_len] = 0;
+
+//        read(sock, message, BUF_SIZE - 1);
 //        printf("Message from server: %s", message);
     }
     close(sock);

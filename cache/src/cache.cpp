@@ -4,11 +4,6 @@
 
 #include "cache.h"
 
-std::string Cache::status_ = "None";
-std::string Cache::local_cache_IP_ = "0.0.0.0";
-std::string Cache::port_for_client_ = "0000";
-std::string Cache::port_for_cache_ = "0000";
-
 Cache::Cache(int cache_size_local, std::string status, std::string local_cache_IP, std::string port_for_client,
              std::string port_for_cache) {
     cache_size_local_ = cache_size_local;
@@ -19,21 +14,35 @@ Cache::Cache(int cache_size_local, std::string status, std::string local_cache_I
 }
 
 void Cache::Start() {
-    std::thread for_master_Heartbeat(Heartbeat);
-    std::thread for_master_chat(Master_chat);
-    std::thread for_client(Client_chat);
-//    std::thread for_cache(CachePass);
+    auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
+    auto Client_chat_bind = std::bind(&Cache::Client_chat, this);
+//    auto cache_pass_bind = std::bind(&Cache::cache_pass, this);
+
+    std::thread for_master_Heartbeat(Heartbeat_bind);
+//    std::thread for_master_chat(Master_chat);
+    std::thread for_client(Client_chat_bind);
+//    std::thread for_cache_pass(cache_pass_bind);
 //    std::thread for_replica(ToReplica);
 
 
     for_master_Heartbeat.join();
-    for_master_chat.join();
+//    for_master_chat.join();
     for_client.join();
-//    for_cache.join();
+//    for_cache_pass.join();
 //    for_replica.join();
 }
 
-//void Cache::ToReplica{
+void Cache::replica_chat() {
+        while (true) {
+            if (status_ == "P") {   // 作为服务器端
+                if (replica_IP_ != "None") {    // 确定备份cache已上线
+
+                }
+            }   else {  // 作为客户端
+
+            }
+        }
+
 //        int cache_rep_sock;
 //        char rep_buff_master[BUF_SIZE];
 //
@@ -59,7 +68,7 @@ void Cache::Start() {
 //                continue;
 //            }
 //        }
-//}
+}
 //
 //
 //void Cache::CachePass() {
@@ -167,6 +176,8 @@ void Cache::Heartbeat() {
     master_addr.sin_port = htons(MASTER_PORT);
     master_addr.sin_addr.s_addr = inet_addr(MASTER_IP);
 
+    Timer *timer = new Timer();//500ms上传一次心跳包
+
     if ((cache_master_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         fprintf(stderr, "Socket Error is %s\n", strerror(errno));
         exit(EXIT_FAILURE);
@@ -179,13 +190,7 @@ void Cache::Heartbeat() {
 
     while (true) {
         // 发送心跳
-        std::string heart_message = "x";
-        heart_message += "#";
-        heart_message += local_cache_IP_;
-        heart_message += "#";
-        heart_message += port_for_client_;
-        heart_message += "#";
-        heart_message += status_;
+        std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + status_;
 
         strcpy(send_buff_master, heart_message.data());
 
@@ -196,47 +201,81 @@ void Cache::Heartbeat() {
         std::cout << "Heartbeat successfully!" << std::endl;
         bzero(send_buff_master, BUF_SIZE);
 
-        // TODO:timer
-        sleep(3);
+        timer->start();
+        while(timer->isRunning());
+        timer->stop();
     }
     close(cache_master_sock);
 }
 
-void Cache::Master_chat() {
-    int cache_master_sock;
-    struct sockaddr_in master_addr;
-    // Master返回的扩缩容信息
-    char recv_buff_master[BUF_SIZE];
+
+//void Cache::Master_chat() {
+//    int cache_master_sock;
+//    struct sockaddr_in master_addr;
+//    // Master返回的扩缩容信息
+//    char recv_buff_master[BUF_SIZE];
+//
+//
+//    bzero(&master_addr, sizeof(master_addr));
+//
+//    master_addr.sin_family = PF_INET;
+//    master_addr.sin_port = htons(MASTER_PORT_2);
+//    master_addr.sin_addr.s_addr = inet_addr(MASTER_IP);
+//
+//    if ((cache_master_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+//        fprintf(stderr, "Socket Error is %s\n", strerror(errno));
+//        exit(EXIT_FAILURE);
+//    }
+//    // 连接master
+//    if (connect(cache_master_sock, (struct sockaddr *) (&master_addr), sizeof(struct sockaddr)) == -1) {
+//        fprintf(stderr, "Connect failed\n");
+//        exit(EXIT_FAILURE);
+//    }
+//
+//    while (true) {
+//        // 接收信息
+//        std::cout << "Receiving message:" << std::endl;
+//
+//        // 接收主从信息和对应主从cache的IP#port，格式：Primary/Replica#IP#port
+//        bzero(recv_buff_master, BUF_SIZE);
+//        recv(cache_master_sock, recv_buff_master, BUF_SIZE, 0);
+//
+//        std::cout << "Receive from master:" << recv_buff_master << std::endl;
+//
+//    }
+//}
 
 
-    bzero(&master_addr, sizeof(master_addr));
-
-    master_addr.sin_family = PF_INET;
-    master_addr.sin_port = htons(MASTER_PORT);
-    master_addr.sin_addr.s_addr = inet_addr(MASTER_IP);
-
-    if ((cache_master_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        fprintf(stderr, "Socket Error is %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-    // 连接master
-    if (connect(cache_master_sock, (struct sockaddr *) (&master_addr), sizeof(struct sockaddr)) == -1) {
-        fprintf(stderr, "Connect failed\n");
-        exit(EXIT_FAILURE);
-    }
-
-    while (true) {
-        // 接收信息
-        std::cout << "Receiving message:" << std::endl;
-
-        // 接收主从信息和对应主从cache的IP#port，格式：Primary/Replica#IP#port
-        bzero(recv_buff_master, BUF_SIZE);
-        recv(cache_master_sock, recv_buff_master, BUF_SIZE, 0);
-        // TODO:容灾：解析主从和IP port
-        // TODO:扩缩容：需要啥信息
-
-    }
-}
+//void Cache:: Master_chat(){
+//    int cache_master_sock;
+//    struct sockaddr_in master_addr;
+//    // 向master发送的心跳包
+//    char recv_buff_master[BUF_SIZE];
+//
+//    bzero(&master_addr, sizeof(master_addr));
+//
+//    master_addr.sin_family = PF_INET;
+//    master_addr.sin_port = htons(MASTER_PORT);
+//    master_addr.sin_addr.s_addr = inet_addr(MASTER_IP);
+//
+//    if ((cache_master_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+//        fprintf(stderr, "Socket Error is %s\n", strerror(errno));
+//        exit(EXIT_FAILURE);
+//    }
+//    // 连接master
+//    if (connect(cache_master_sock, (struct sockaddr *) (&master_addr), sizeof(struct sockaddr)) == -1) {
+//        fprintf(stderr, "Connect failed\n");
+//        exit(EXIT_FAILURE);
+//    }
+//
+//    while(true){
+//        std::cout << "Receiving message:" << std::endl;
+//        bzero(recv_buff_master, BUF_SIZE);
+//        recv(cache_master_sock, recv_buff_master, BUF_SIZE, 0);
+//        std::cout << "Receive from master:" << recv_buff_master << std::endl;
+//        ReadFromMaster(recv_buff_master);
+//    }
+//}
 
 
 void Cache::Client_chat() {
@@ -268,24 +307,23 @@ void Cache::Client_chat() {
         if (spear == message.size()) {
             //client要求读出值
             std::string key = message;
-            std::cout << "keykeykey:" << key << std::endl;
             std::string res;
-            if (MainCache.check(key)) {
+            if (MainCache.check(key) > 0) {
                 res = MainCache.get(key);
-                buffer = res;
+                buffer = "SUCCESS#" + res + "#" + local_cache_IP_ + ":" + port_for_client_;
+
             } else {
-                buffer = "key not found";
+                buffer = "FAILED#" + key + "#" + local_cache_IP_ + ":" + port_for_client_;
             }
 
             return targetPort;
         } else {
             //client要求写入值
-            std::cout << "oning" << std::endl;
             std::string key = message.substr(0, spear);
-            std::cout << "write keykeykey:" << key << std::endl;
             std::string val = message.substr(spear + 1, message.size());
             MainCache.put(key, val);
-            buffer = "write success";
+            buffer = "SUCCESS#" + key + "#" + local_cache_IP_ + ":" + port_for_client_;
+
             return targetPort;
         }
     };
@@ -308,6 +346,13 @@ void Cache::Client_chat() {
     if ((serv_client_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         fprintf(stderr, "Socket Error is %s\n", strerror(errno));
         exit(EXIT_FAILURE);
+    }
+
+
+    int setsockopt_val = 1;
+    if (setsockopt(serv_client_sock, SOL_SOCKET, SO_REUSEADDR, &setsockopt_val, sizeof(int)) < 0) {
+        std::cout << "setsockopt error" << std::endl;
+        exit(1);
     }
 
     if (bind(serv_client_sock, (struct sockaddr *) &serv_client_addr, sizeof(serv_client_addr)) == -1) {
@@ -356,29 +401,72 @@ void Cache::Client_chat() {
                 addfd(epfd, client_fd, true);
             } else {
                 bzero(recv_buff_client, BUF_SIZE);
-                std::cout << "Before message:" << recv_buff_client << std::endl;
                 int len = recv(client_events[i].data.fd, recv_buff_client, BUF_SIZE - 1, 0);
-//                read(client_events[i].data.fd, recv_buff_client, BUF_SIZE - 1);
-//                std::string temp = "kkk";
-//                recv_buff_client = temp;
-//                std::string temp = recv_buff_client;
-                std::cout << "receive message:" << recv_buff_client << std::endl;
-                LRU_handle_task(recv_buff_client, i);
-//                LRU_handle_task("keykeykey", i);
-//                auto future = TP.enqueue(LRU_handle_task, recv_buff_client, i);
-//                future_queue.emplace(std::move(future));
-//                int targetPort = get_port(future_queue.front());
-                memcpy(send_buff_client, buffer.c_str(), buffer.size());
-//                //向端口传出数据
-//                send(client_events[targetPort].data.fd, send_buff_client, BUF_SIZE, 0);
-                std::cout << "return value:" << send_buff_client << std::endl;
-//                //移除事件
-//                future_queue.pop();
+                if (len == 0) {
+                    epoll_ctl(epfd, EPOLL_CTL_DEL, client_events[i].data.fd, NULL);
+                    close(client_events[i].data.fd);
+                    std::cout << "close client:" << client_events[i].data.fd << std::endl;
+                }
+                else {
+//                    LRU_handle_task(recv_buff_client, i);
+//                    send(client_events[i].data.fd, send_buff_client, BUF_SIZE, 0);
+                    auto future = TP.enqueue(LRU_handle_task, recv_buff_client, i);
+                    future_queue.emplace(std::move(future));
+                    int targetPort = get_port(future_queue.front());
+                    memcpy(send_buff_client, buffer.c_str(), buffer.size());
+//                    //向端口传出数据：SUCCESS/FAILED#key#ip:port(cache server)
+                    send(client_events[targetPort].data.fd, send_buff_client, BUF_SIZE, 0);
+                    std::cout << "========================================return value:" << send_buff_client << std::endl;
+
+                    // TODO:1.client关闭后cache被强制关闭，可能需改进send
+                    // TODO:2.将最新的状态写入缓冲区，用于Replica
+                    //移除事件
+                    future_queue.pop();
+                }
                 bzero(send_buff_client, BUF_SIZE);
             }
         }
     }
+    close(serv_client_sock);
+    close(epfd);
 }
+
+
+//void Cache::ReadFromMaster(std::string message) {
+//    int spear = 2;
+//    while (spear != message.size() && message[spear] != '#') {
+//        spear++;
+//    }
+//    std::string head = message.substr(0,1);   //P或者R
+//    std::lock_guard<std::mutex> guard(mutex);
+//    if(head == "S"){
+//        status_ = head;
+//        std::string tmp = "";
+//        int count = 0;
+//        for(int i = 1; i < message.size(); i++){
+//            if(message[i] != '#'){
+//                tmp += message[i];
+//            }else{
+//                if(count % 2 == 0){
+//                    otherIP.push_back(tmp);
+//                }else{
+//                    otherPort.push_back(tmp);
+//                }
+//                count++;
+//                tmp.clear();
+//            }
+//        }
+//        otherPort.push_back(tmp);
+//    }else if(head =="P"){
+//        status_ = head;
+//        replica_IP_ = message.substr(2, spear);
+//        port_for_replica = message.substr(spear + 1, message.size());
+//    }else if(head == "R"){
+//        status_ = head;
+//        primary_IP_ = message.substr(2, spear);
+//        port_for_primary = message.substr(spear + 1, message.size());
+//    }
+//}
 
 
 // 注册新的fd到epollfd中
