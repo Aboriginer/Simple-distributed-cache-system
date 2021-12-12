@@ -37,7 +37,7 @@ const int EPOLL_SIZE = 100;
 
 const int REQUEST_INTERVAL = 1000;  // 产生读写请求间隔 ms
 
-const int WAITING_TIME = 500;  // 超时重传等待时间 ms
+const int WAITING_TIME = 5;  // 超时重传等待时间，单位 100ms
 
 // 超时重传回调函数接收的参数
 struct ReSendMassage {

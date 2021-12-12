@@ -7,6 +7,7 @@
 #include <list>
 
 // typedef void (*TimerExpired)(void *);
+const int TIME_UNIT  = 100000;  // 定时最小间隔，单位us
 
 class Timer
 {
@@ -38,7 +39,7 @@ public:
 	void setData(void *);
 
 private:
-	int32_t timeout;  // 超时时间 ms
+	int32_t timeout;  // 超时时间
 
 	bool periodic;  //false: 单次定时事件；true: 循环定时
 

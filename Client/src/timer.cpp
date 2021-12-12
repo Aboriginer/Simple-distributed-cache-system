@@ -37,9 +37,9 @@ void Timer::createTimer(int32_t timeout_ms, bool _periodic,
 	sigaction(SIGALRM, &sa, NULL);
 
 	timer.it_value.tv_sec = 0;
-	timer.it_value.tv_usec = 1000;
+	timer.it_value.tv_usec = TIME_UNIT;
 	timer.it_interval.tv_sec = 0;
-	timer.it_interval.tv_usec = 1000;
+	timer.it_interval.tv_usec = TIME_UNIT;
 
 	initialized = true;
 
@@ -47,7 +47,7 @@ void Timer::createTimer(int32_t timeout_ms, bool _periodic,
 }
 
 Timer::Timer() {
-	createTimer(1000, false, NULL, NULL);
+	createTimer(100000 / TIME_UNIT, false, NULL, NULL);
 }
 
 Timer::Timer(int32_t timeout_ms, bool _periodic, 
