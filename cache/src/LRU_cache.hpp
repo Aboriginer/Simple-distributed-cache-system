@@ -2,6 +2,7 @@
 #include <unordered_map>
 #include <mutex>
 
+#define DEFAULT_CAPACITY 10
 template<typename T>
 class null {
     null() = default;
@@ -30,6 +31,8 @@ private:
     int size;
     int capacity;
 public:
+    LRU_Cache();                //默认构造函数
+    void set_capacity(int capacity_);  //为
     LRU_Cache(int capacity__);//构造函数
     const T2 get(T1 key);         //获取关键字的值
     bool check(T1 key);     //查找值是否存在
@@ -44,6 +47,17 @@ private:
 };
 
 template<typename T1, typename T2>
+LRU_Cache<T1, T2>::LRU_Cache(){
+    capacity = DEFAULT_CAPACITY;
+    size = 0;
+    //使用伪头部和伪尾部节点
+    head = new DNode<T1,T2>();
+    tail = new DNode<T1,T2>();
+    head->next = tail;
+    tail->prev = head;
+}
+
+template<typename T1, typename T2>
 LRU_Cache<T1, T2>::LRU_Cache(int capacity__){
     capacity = capacity__;
     size = 0;
@@ -53,6 +67,13 @@ LRU_Cache<T1, T2>::LRU_Cache(int capacity__){
     head->next = tail;
     tail->prev = head;
 }
+
+//^ 设定LRU缓存的最大容量
+template<typename T1, typename T2>
+void LRU_Cache<T1, T2>::set_capacity(int capacity_){
+    capacity = capacity_;
+}
+
 
 //^ 主要功能：获取关键字的值
 template<typename T1, typename T2>
