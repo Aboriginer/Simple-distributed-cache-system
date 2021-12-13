@@ -30,9 +30,9 @@ uint32_t ConsistentHash::murmur3_32(string s, int len){
 }
 void ConsistentHash::initialize(int _nodes, int _v_nodes)
 {
-    for(int i = 0; i < nodes; ++i) //i:ip
+    for(int i = 0; i < _nodes; ++i) //i:ip
     {
-        for(int j = 0; j < v_nodes; ++j) 
+        for(int j = 0; j < _v_nodes; ++j) 
         {
             stringstream s;
             s << "SHARD-" << i << "NODE-" << j;//shard
@@ -44,12 +44,17 @@ void ConsistentHash::initialize(int _nodes, int _v_nodes)
 size_t ConsistentHash::GetServer(const char* key)
 {
     uint32_t key1 = murmur3_32(key, strlen(key));
-    map<uint32_t, size_t>::iterator it = key2Index.lower_bound(key1);
+    // cout<<key1;
+    // cout<<key2Index.size()<<endl;
+    cout<<"key1:"<<key1<<"\t";
+    // cout<<<<endl;
+    auto it = key2Index.lower_bound(key1);
+    cout<<"it:"<<it->first<<"\t";
     if(it == key2Index.end())
     {
-        return key2Index.begin()->second;
+        return key2Index.begin()->first;
     }
-    return it->second;
+    return it->first;
 }
 void ConsistentHash::deleteNode(const int index)
 {

@@ -23,6 +23,7 @@
 #include <functional>
 #include <sstream>
 #include "ConsistentHash.hpp"
+#include <unistd.h>
 // Master IP地址
 #define MASTER_IP "127.0.0.1"
 
@@ -31,36 +32,23 @@
 
 // 服务器端口号
 #define CLIENT_PORT 10000
-#define CACHE_PORT 8000
+// #define CACHE_PORT 
+#define CACHE_PORT 8889
+
 
 const int MAX_EVENT_NUMBER = 10000; //最大事件数
-const int EPOLL_SIZE = 15;  // epoll支持的最大句柄数
+const int EPOLL_SIZE = 20;  // epoll支持的最大句柄数
 const int MAX_THREADS_NUMBER = 10; // 最大线程数量
 using namespace std;
 
 
-class cMessage{
-public:
-    cMessage(uint32_t num, string key, uint32_t write){
-        this->num = num;
-        this->key = key;
-        this->write = write;
-    }
-    cMessage(uint32_t addr, time_t timeFlag) {
-        this->addr = addr;
-        this->timeFlag = timeFlag;
-    }
-    uint32_t num = 0;
-    string key = "1";
-    uint32_t write = 1;
-    uint32_t addr = 100;
-    time_t timeFlag = 111;
-    
-};
 class Master {
 
 public:
     ConsistentHash cacheAddrHash;
+
+    std::unordered_map<int, struct fdmap *> clients_list;
+    std::vector<int> fd_node;
     // 有参构造
     Master();
     // 启动服务器端
@@ -68,43 +56,22 @@ public:
     void Close();
     //================================================================================
 
-    class heartBeatResponse{
-    public:
-        heartBeatResponse(uint32_t addr, time_t timeFlag) {
-            this->cacheServerAddr = addr;
-            this->timeFlag = timeFlag;
-        }
-        uint32_t cacheServerAddr = 0;
-        time_t timeFlag = 0;
-    };
 
-    uint32_t heartBeatInterval = 30 ;//???
+    uint32_t heartBeatInterval = 5 ;//???
     uint32_t a = 0;
 
-    void handleMessage(cMessage* msg);
+    // void handleMessage(cMessage* msg);
 
-    uint32_t handleClientMessage(string msg);
+    string handleClientMessage(string msg);
 
-    void handleHeartBeatResponse(int msg);
-    bool heartBeatDetect(uint32_t cacheServerAddr);
-    void periodicDetectCache();
+    void handleHeartBeatResponse(string msg);
+    bool heartBeatDetect(string cacheServerAddr);
     //================================================================================
 private:
     void start_cache();
     void start_client();
+    void periodicDetectCache();
 
-    //================================================================================
-
-    // static uint32_t getCacheServerAddr(string key);
-    // static uint32_t getCacheServerAddr();
-
-    bool furtherHeartBeatDetect(uint32_t cacheServerAddr);
-    void updateKeyCacheMapByHeartBeat(uint32_t cacheAddr);
-
-
-//    Master::heartBeatResponse* msg2heart(cMessage* msg);
-
-    // static uint32_t loadBalance();
     void updateKeyCacheMapByCacheReq(string recv_buff_client);
     //================================================================================
 //    vector<string> split(string s, string seperator);
@@ -167,7 +134,7 @@ static vector<string> split(string s, string seperator){
 }
 
 struct fdmap {
-    char status;              //  'p'/'r'
+    char status;            //  'P'/'R'
     int fd;
     int pair_fd;            //  pair fd
     std::string ip_port;    //  IP#PORT

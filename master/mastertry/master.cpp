@@ -1,8 +1,8 @@
 #include "master.h" 
 using namespace std;
 
-unordered_map<string , uint32_t> keyCacheMap;
-unordered_map<uint32_t, time_t> cacheAddrMap;
+// unordered_map<string , uint32_t> keyCacheMap;
+unordered_map<string, time_t> cacheAddrMap;
 Master::Master() {}
 
 void Master::start_client() {
@@ -58,7 +58,7 @@ void Master::start_client() {
     // 往事件表中添加监听事件
     addfd(epfd, client_listener, true);
     // 开辟共享内存 
-
+    cout<<"the next is while true"<<endl;
     while (true) {
         // epoll_events_count表示就绪事件数目
         int epoll_events_count = epoll_wait(epfd, client_events, EPOLL_SIZE, -1);
@@ -91,12 +91,13 @@ void Master::start_client() {
 
                 //===========================================================
                 string recv_buff_str = recv_buff_client;
-                uint32_t cacheServerAddr = handleClientMessage(recv_buff_str);
-                char cacheServerAddrChar[BUF_SIZE];
-                sprintf(cacheServerAddrChar, "%d", cacheServerAddr);
-                // cout<<"hikh"<<endl;
+                string cacheServerAddr = handleClientMessage(recv_buff_str);
+                string send_to_client = "MASTER#" + recv_buff_str + "#" + cacheServerAddr;
+                // char cacheServerAddrChar[BUF_SIZE];
+                // sprintf(cacheServerAddrChar, "%d", cacheServerAddr);
+                // // cout<<"hikh"<<endl;
                 //===========================================================
-                strcpy(send_buff_client, cacheServerAddrChar);  //CacheSever IP
+                strcpy(send_buff_client, send_to_client.c_str());  //CacheSever IP
                 send(client_events[i].data.fd, send_buff_client, BUF_SIZE, 0);
 
                 memset(recv_buff_client, 0, sizeof(recv_buff_client));
@@ -115,9 +116,9 @@ void Master::start_cache() {
     int cache_sock;
     int cache_listener = 0;
 
-    // 客户端列表
-    std::unordered_map<int, struct fdmap *> clients_list;
-    std::vector<int> fd_node;
+//    // 客户端列表
+//    std::unordered_map<int, struct fdmap *> clients_list;
+//    std::vector<int> fd_node;
 
     // 主cache堆栈
     stack<int> pcache;
@@ -207,69 +208,58 @@ void Master::start_cache() {
                 char pch = recv_buff_client[0];
                 if (pch == 'x') { // 心跳包请求："x#ip#port#status"
                     struct fdmap *it = clients_list[client_events[i].data.fd];
-                    std::cout << "get heartbeat from cache server:" << recv_buff_client << std::endl;
+                    //————————————————————————————————-————--————————————————————————————————————————————
+                    std::cout << "get heartbeat from cache server:" << recv_buff_client << std::endl; 
+                    //————————————————————————————————-————--————————————————————————————————————————————
                     //################################################# 2/3
                     string recv_buff_str = recv_buff_client;
                     vector<string> vtmsg = split(recv_buff_str, "#");
                     // 陌生人自报家门
                     if (clients_list[client_events[i].data.fd]->ip_port == "0") {
                         string socli = vtmsg[1]+"#"+vtmsg[2];
-                        cout<<socli<<":"<<socli.size()<<endl;
+                        //cout<<socli<<endl;
                         it->ip_port = socli; //写ip_port
-                        cout<<it->ip_port<<":"<<it->ip_port.size()<<endl;
+                        cout<<it->ip_port<<endl;
                         clients_list[client_events[i].data.fd]->status = vtmsg[3][0]; //写主备
                         // cout<<socli<<endl;
                         //分配备份server
-                        if (vtmsg[3] == "p") {
-                            if (!rcache.empty()) {
+                        if (vtmsg[3] == "P") {
+                            if (!rcache.empty()) {  //有多余的备份
                                 clients_list[client_events[i].data.fd]->pair_fd = rcache.top();
+                                clients_list[rcache.top()]->pair_fd = client_events[i].data.fd;
                                 rcache.pop();
                             }
+                            else {  //没有多余的备份
+                                pcache.push(client_events[i].data.fd);
+                            }
                         }
-                        else if (vtmsg[3] == "r") {
+                        else if (vtmsg[3] == "R") {
                             if (!pcache.empty()) {
                                 clients_list[client_events[i].data.fd]->pair_fd = pcache.top();
+                                clients_list[pcache.top()]->pair_fd = client_events[i].data.fd;
                                 pcache.pop();
+                            }
+                            else {
+                                rcache.push(client_events[i].data.fd);
                             }
                         }                       
                     }
                     //发送应答 p/r#ip#port
                     char cacheServerAddrChar[BUF_SIZE];
-                    cout<<"endif"<<endl;
-                    // char ctmp[20];
-                    // string s="1234";
-                    // strcpy(ctmp, clients_list[it->pair_fd]->ip_port.data());
-                    // char * sendtmp = ;
-                    // cout<<"string"<<endl;
-                    // sprintf(send_buff_client, "%c#%s", , ctmp);
-                    // cout<<"sprintf"<<endl;
-                    // strcpy(send_buff_client,sendtmp.c_str());
-                    // strcpy(send_buff_client, sendtmp);
                     stringstream ss;
                     ss << it->status;
-                    // cout<<"1"<<endl;
                     ss << "#";
-                    // cout<<"2"<<endl;
-                    // string tmp =  clients_list[it->pair_fd]->ip_port;
-                    // cout<<tmp<<endl;
-                    // cout<<tmp.size()<<endl;
                     if (it->pair_fd > -1) {
                         ss << (clients_list[it->pair_fd]->ip_port).c_str();
                     }
                     else {
-                        ss << "ip#port";
+                        ss << "none";
                     }
                     string str2 = ss.str();
-                    // cout<<"string"<<endl;
-                    // sprintf(tmp, "%c", );
-                    // tmp += "#";
-                    // tmp += clients_list[it->pair_fd]->ip_port;
                     strcpy(send_buff_client, str2.data());
-                    // cout<<"strcpy"<<endl;
                     send(client_events[i].data.fd, send_buff_client, BUF_SIZE, 0);
-                    // cout<<"send"<<endl;
                     memset(send_buff_client, 0, sizeof(send_buff_client));
-                    handleHeartBeatResponse(client_events[i].data.fd);
+                    handleHeartBeatResponse(recv_buff_client);
                     //#################################################
                 }
                 else if (pch == 'g') {  // 更新请求："g#ip#port#key"
@@ -285,72 +275,61 @@ void Master::Start() {
     cacheAddrHash.initialize(3,100);
     auto f_client = std::bind(&Master::start_client, this);
     auto f_cache = std::bind(&Master::start_cache, this);
+    auto f_periodheart = std::bind(&Master::periodicDetectCache,this);
     std::thread for_client(f_client);
     std::thread for_cache(f_cache);
+    std::thread for_heart(f_periodheart);
 
     for_client.join();
     for_cache.join();
+    for_heart.join();
+    // periodicDetectCache();
 }
 
-uint32_t Master::handleClientMessage(string msg){
-    // 收到client的请求包，请求包中需要包含1）执行read/write；2）read/write需要的key
-    // read--返回key对应的cache地址；
-    // write--通过负载均衡获取key需要写入的cache地址  read#key
-    // vector<string> vtmsg = split(msg, "#");
-    cout << "handle Client Request" << endl;
-//    string clientkey = msg->key;
-//    bool write = msg->write;
-//     if(vtmsg.size()!=2){
-// //        error==========================
-//     }
-//     string msgflg = vtmsg[0];
-//     string clientkey = vtmsg[1];
-    uint32_t cacheServerAddr = cacheAddrHash.GetServer(msg.c_str());
-    // uint32_t cacheServerAddr = 0;
-    // if(msgflg == "w"){
-    //     //write
-    //     cout << "the request is write" << endl;
-    //     if (keyCacheMap.find(clientkey) == keyCacheMap.end()) {
-    //         // the cache server dose not cache the contain of key --> For the first time to write
-    //         cacheServerAddr = getCacheServerAddr();
-    //         keyCacheMap.insert(pair<string, uint32_t>(clientkey, cacheServerAddr));
-    //     }
-    //     else {
-    //         // the cache server cache the contain of key --> update the value of key
-    //         cacheServerAddr = getCacheServerAddr(clientkey);
-    //     }
-    //     cout << "keyCacheMap[" << clientkey << "]=" << cacheServerAddr << endl;
-    // } else if (msgflg == "r"){
-    //     // read
-    //     cout << "the request is read" << endl;
-    //     cacheServerAddr = getCacheServerAddr(clientkey);
-    //     cout << "the key is in cache server" << cacheServerAddr << endl;
-    // }
+string Master::handleClientMessage(string msg){
+    // 获得虚拟节点对应的值
+    cout<< cacheAddrHash.key2Index.size()<<endl;
+    cout<< "msg:"<<msg<<endl;
+    size_t vir_node = cacheAddrHash.GetServer(msg.c_str());
+    cout<<"vir_node:" <<vir_node<<"\t";
+    // 虚拟节点对应的真实节点的索引
+    int index = cacheAddrHash.key2Index[vir_node];
+    cout<<"index:" <<index<<"\t";
+    // cout<<"the size of key2index:"<<cacheAddrHash.key2Index.size()<<endl;
+    // 通过fd_node根据返回的index索引到cache对应的fd
+    int fd = fd_node[index];
+    cout<<"fd:"<<fd<<"\t";
+    // 根据fd找到对应的ip：port
+    string cacheServerAddr1 = clients_list[fd]->ip_port;
+    cout<<cacheServerAddr1<<endl;
+    
+    // 返回格式为ip:port?
+    vector<string> vtstr = split(cacheServerAddr1, "#");
+    string cacheServerAddr = vtstr[0]+":"+vtstr[1];
+    cout<<cacheServerAddr<<endl;
     return cacheServerAddr;
 }
 
 
-// uint32_t Master::getCacheServerAddr(string key){
-//     // get cacheServerNum by key (client read)
-//     if(keyCacheMap.find(key)==keyCacheMap.end()){
-// //        error========================================================
-// //        throw string("cache server has not contain about key");
-//     }
-//     return keyCacheMap[key];
-// }
-
-
-// uint32_t Master::getCacheServerAddr(){
-//     // get cacheServerNum by load balance (client write)
-//     uint32_t cacheServerAddr = loadBalance();
-//     return cacheServerAddr;
-// }
-
-
 //################################################################################3/3
-void Master::handleHeartBeatResponse(int msg) {
+void Master::handleHeartBeatResponse(string msg) {
     // 心跳检测包处理
-    cout << "handle heartbeat message" << endl;
+    //————————————————————————————————-————--——————————————————————————————
+    //cout << "handle heartbeat message" << endl;
+    //————————————————————————————————-————--——————————————————————————————
+    time_t timeNow;
+    time(&timeNow);
+    //————————————————————————————————-————--——————————————————————————————
+    //cout << "the time is: "<< timeNow<<endl;
+    //————————————————————————————————-————--——————————————————————————————
+    // "x#ip#port"，其中ip:port是cache_server的套接字地址    
+    vector<string> vtmsg = split(msg, "#");
+    if(vtmsg.size()<3){
+        // error==========
+    }
+    string cacheAddr = vtmsg[1]+"#"+vtmsg[2];
+    cacheAddrMap[cacheAddr] = timeNow;
+
     //TODO：更新时间戳
 /* 
     vector<string> vtmsg = split(msg, "#");
@@ -361,52 +340,60 @@ void Master::handleHeartBeatResponse(int msg) {
 }
 //################################################################################
 
-bool Master::heartBeatDetect(uint32_t cacheServerAddr) {
+bool Master::heartBeatDetect(string cacheServerAddr) {
     // 对cache server判断是否存活
-    cout << "judge the cache " << cacheServerAddr<<" is or not activate" << endl;
+    // cout << "judge the cache " << cacheServerAddr<<" is or not activate" << endl;
     time_t timeNow;
     time(&timeNow);
-    if (cacheAddrMap[cacheServerAddr] - timeNow < heartBeatInterval) {
-        cout << "the cache " << cacheServerAddr << " is activate" << endl;
+    //————————————————————————————————-————--——————————————————————————————
+    //cout<<"the diff: "<<timeNow - cacheAddrMap[cacheServerAddr]<<endl;  ｜
+    //————————————————————————————————-————--——————————————————————————————
+    if (timeNow - cacheAddrMap[cacheServerAddr] < heartBeatInterval) {
+    //————————————————————————————————-————--——————————————————————————————
+    //   cout << "the cache " << cacheServerAddr << " is activate" << endl;
+    //————————————————————————————————-————--——————————————————————————————
         return true;
     }
-    return furtherHeartBeatDetect(cacheServerAddr);
-}
-
-bool Master::furtherHeartBeatDetect(uint32_t cacheServerAddr) {
+    // return furtherHeartBeatDetect(cacheServerAddr);
+    //————————————————————————————————-————--——————————————————————————————
+    //cout << "the cache " << cacheServerAddr << " is not activate" << endl;
+    //————————————————————————————————-————--——————————————————————————————
     return false;
 }
+
 //========================================================================================
 void Master::periodicDetectCache(){
-    // 周期性更新本地的cache时间戳的表
-    for(auto cacheAddr : cacheAddrMap){
-//        time_t timeNow = time(&(this->timeFlag));
-        time_t timeNow;
-        time(&timeNow);
-        if(heartBeatDetect(cacheAddr.first)){
+    while(true){
+        //————————————————————————————————-————--
+        //cout<< "periodicDetectCache"<<endl;   ｜
+        //————————————————————————————————-————--
+        // 周期性更新本地的cache时间戳的表
+        for(auto cacheAddr : cacheAddrMap){
+            time_t timeNow;
+            time(&timeNow);
+            if(heartBeatDetect(cacheAddr.first)){
 
-            continue;
-        } else{
-            updateKeyCacheMapByHeartBeat(cacheAddr.first);
+                continue;
+            } else{
+                // updateKeyCacheMapByHeartBeat(cacheAddr.first);
+                // // 这里应该做类似缩容的事情——>删除哈希节点——>但是如何获取index？
+                // index = ？
+                // cacheAddrHash.deleteNode(index);
+            }
         }
+        sleep(3);
     }
 }
 
-void Master::updateKeyCacheMapByHeartBeat(uint32_t cacheAddr){
-    //    keyCacheMap: key - cacheServerAddr
-    // for(auto keyCache : keyCacheMap){
-    //     if(keyCache.second == cacheAddr){
-    //         keyCacheMap.erase(keyCache.first);
-    //     }
-    // }
-}
+// void extendCapability(){
+//     int index = fd_node.size();
+//     cacheAddrHash.addNode(index);
+// }
 
-// uint32_t Master::loadBalance(){
-// //    uint32_t cacheServerNum;
-// //    if(heartBeatDetect(cacheServerNum)){
-// //        return cacheServerNum;
-// //    }
-//     return 100;
+// void shrinkageCapacity(){
+//     int index = fd_node.size()-1;
+//     // fd_node.pop();
+//     cacheAddrHash.deleteNode(index);
 // }
 
 void Master::updateKeyCacheMapByCacheReq(string msg){
