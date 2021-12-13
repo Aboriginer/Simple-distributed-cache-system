@@ -32,20 +32,19 @@ const int KEY_LENGTH = 3;
 const int VALUE_LENGTH = 10;
 
 const int MAX_EVENT_NUMBER = 100;
-
 const int EPOLL_SIZE = 100;
 
-const int REQUEST_INTERVAL = 1000;  // 产生读写请求间隔 ms
+const int REQUEST_INTERVAL = 1000;  // 产生读写请求间隔，单位 ms
 
-const int WAITING_TIME = 5;  // 超时重传等待时间，单位 100ms
+const int WAITING_TIME = 5;  // 应用层超时重传等待时间，单位 100ms
 
 // 超时重传回调函数接收的参数
 struct ReSendMassage {
 	std::string addr;
 	int sock;
 	std::string massage;
-	Timer* timer;
-	// std::shared_ptr<Timer> timer;
+	// Timer* timer;
+	std::shared_ptr<Timer> timer;
 };
 
 class Client {
@@ -58,7 +57,8 @@ public:
 
 	void connect_master();
 
-	// 检查cache_server的请求是否收到回复，主动发现cache_server宕机
+	// 检查cache_server的请求是否收到回复，
+	// 主动发现cache server宕机并重新向master请求未被响应的key的分布
 	void check_cache_server_request_map();
 
 	// 处理子进程发来的消息
@@ -86,8 +86,6 @@ public:
 	void erase_item_from_request_map(const std::string cache_server_addr, 
 																	 const std::string key);
 
-	void master_resend(void * pData);
-
 	void cache_server_resend(void * pData);
 
 private:
@@ -98,8 +96,8 @@ private:
 
 	int epollfd_;
 
-	int master_sock;
-	int cache_sever_sock;
+	int master_sock_;
+	int cache_sever_sock_;
 
 	// fd[0]用于父进程随机生成key，检查本地cache后将key发送给子进程
 	// fd[1]用于子进程接受父进程key
@@ -115,14 +113,13 @@ private:
 	int cache_size_local_;
 
 	// 本地Cache缓存
-	cache::lru_cache<std::string, std::string>* cache_lru;
+	std::shared_ptr<cache::lru_cache<std::string, std::string>> cache_lru;
 
 	// 管理向cache_server发送的请求,ip-list key
-	std::unordered_map<std::string, std::list<std::string>> cache_server_request_;
+	std::unordered_map<std::string, std::list<std::string>> request_map_;
 
 	// master重传定时器
-	Timer *master_timer;
-	// std::shared_ptr<Timer> master_timer;
+	std::shared_ptr<Timer> master_timer;
 
 	ReSendMassage master_massage;
 	ReSendMassage cache_server_massage;

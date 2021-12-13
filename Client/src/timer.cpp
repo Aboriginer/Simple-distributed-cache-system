@@ -11,7 +11,7 @@ std::list<Timer *> Timer::pTimers;
 
 bool Timer::initialized = false;
 
-void Timer::createTimer(int32_t timeout_ms, bool _periodic, 
+void Timer::createTimer(const int32_t timeout_ms, bool _periodic, 
 												std::function<void (void *)> TimerCallback, void *data) {
 	static struct sigaction sa;
 	static struct itimerval timer;
@@ -34,7 +34,7 @@ void Timer::createTimer(int32_t timeout_ms, bool _periodic,
 	// 将 timer_handler 作为超时信号 SIGVTALRM 的信号处理函数*/
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = &timer_handler;
-	sigaction(SIGALRM, &sa, NULL);
+	sigaction(SIGALRM, &sa, nullptr);
 
 	timer.it_value.tv_sec = 0;
 	timer.it_value.tv_usec = TIME_UNIT;
@@ -43,11 +43,11 @@ void Timer::createTimer(int32_t timeout_ms, bool _periodic,
 
 	initialized = true;
 
-	setitimer(ITIMER_REAL, &timer, NULL);
+	setitimer(ITIMER_REAL, &timer, nullptr);
 }
 
 Timer::Timer() {
-	createTimer(100000 / TIME_UNIT, false, NULL, NULL);
+	createTimer(100000 / TIME_UNIT, false, nullptr, nullptr);
 }
 
 Timer::Timer(int32_t timeout_ms, bool _periodic, 
@@ -61,7 +61,7 @@ void Timer::stop() {
 }
 
 void Timer::setData(void *data) {
-	if (data == NULL) {
+	if (data == nullptr) {
 		data = this;
 	}
 	pData = data;

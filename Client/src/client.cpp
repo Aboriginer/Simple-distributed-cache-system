@@ -6,7 +6,8 @@ Client::Client(int cache_size_local,char mode) {
 	mode_ = mode;
 	
 	cache_size_local_ = cache_size_local;
-	cache_lru = new cache::lru_cache<std::string, std::string>(cache_size_local_);
+	cache_lru = std::make_shared<
+		cache::lru_cache<std::string, std::string>>(cache_size_local_);
 
 	bzero(&master_addr, sizeof(master_addr));
 	bzero(&cache_sever_addr, sizeof(cache_sever_addr));
@@ -17,8 +18,8 @@ Client::Client(int cache_size_local,char mode) {
 
 	cache_sever_addr.sin_family = PF_INET;
 
-	master_sock = 0;
-	cache_sever_sock = 0;
+	master_sock_ = 0;
+	cache_sever_sock_ = 0;
 }
 
 void Client::init() {
@@ -31,22 +32,20 @@ void Client::init() {
 	}
 	connect_master();
 
-	// addfd(epollfd_, master_sock, true);
-	addfd(epollfd_, master_sock, false);
+	addfd(epollfd_, master_sock_, false);
 	addfd(epollfd_, pipe_fd_[0], true);
-	// master_timer = std::make_shared<Timer> (WAITING_TIME, false, NULL, (void*)&master_massage);
-	master_timer = new Timer(WAITING_TIME, false, NULL, (void*)&master_massage);
-	// master_timer->setCallback(std::bind(&Client::master_resend, 
-	// 																		this, 
-	// 																		std::placeholders::_1));
+
 	// master超时重传
+	master_timer = std::make_shared<Timer> (WAITING_TIME, false, nullptr, 
+																					(void*)&master_massage);
 	master_timer->setCallback([](void * pData){
 		std::string massage_tem = ((ReSendMassage*) pData)->massage;
 		LOG(INFO) << "Master timeout retransmission" + 
 								massage_tem;
-		if (send(((ReSendMassage*) pData)->sock, massage_tem.data(), BUF_SIZE, 0) == -1) {
+		if (send(((ReSendMassage*) pData)->sock, 
+				massage_tem.data(), BUF_SIZE, 0) == -1) {
 			LOG(ERROR) << "Re-send to master error";
-		};
+		}
 	});
 }
 
@@ -54,10 +53,10 @@ void Client::start() {
 	int pid = fork();
 	if (pid < 0) {
 		LOG(ERROR) << "Fork error";
-		close(master_sock);
+		close(master_sock_);
 		exit(-1);
 	} else if (pid == 0) {
-		// 进入子进程，子进程负责写入管道，关闭读端
+		// 进入子进程，子进程负责随机产生key发送给父进程
 		close(pipe_fd_[0]);
 
 		while (true) {
@@ -76,36 +75,35 @@ void Client::start() {
 				} 
 				key_list_file.close();
 			} else if (mode_ == 'w') {
-				std::string key = strRand(KEY_LENGTH);  // 随机生成Key
+				// write模式，随机生成
+				std::string key = strRand(KEY_LENGTH);
 				send_key_to_father(key, 'w');
 				std::cout << key << std::endl;
-				usleep(REQUEST_INTERVAL * 1000);  // 微秒
+				usleep(REQUEST_INTERVAL * 1000);
 			}
 		}
 	} else {
-		// 进入父进程，父进程负责读管道数据，关闭写端
+		// 进入父进程，父进程负责接收并处理来自子进程、master、cache server的消息
 		close(pipe_fd_[1]);
 
 		while(true) {
 			int epoll_events_count = epoll_wait(epollfd_, events, MAX_EVENT_NUMBER, -1);
-			// 处理就绪事件
 			for (int i = 0; i < epoll_events_count; ++i) {
 				if (events[i].data.fd == pipe_fd_[0]) {
 					// 子进程写入，message example: "CHILD#KEY"
 					int ret = read(events[i].data.fd, message, BUF_SIZE);
 					dealwith_child(message);
-					// TODO: 改为定时事件
-					check_cache_server_request_map();
-				} else if (events[i].data.fd == master_sock) {
-					// master返回分布，message example: "KEY#ip:port"
+					check_cache_server_request_map();  // TODO: 改为定时事件
+				} else if (events[i].data.fd == master_sock_) {
+					// master消息，message example: "KEY#ip:port"
 					int ret = read(events[i].data.fd, message, BUF_SIZE);
 					dealwith_master(message);
 				} else {
-					// cache server返回是否读写成功
+					// cache server消息，message example: SUCCESS/FAILED#key#ip:port 
 					int ret = read(events[i].data.fd, message, BUF_SIZE);
 					dealwith_cache_server(message);
 					close(events[i].data.fd);
-					epoll_ctl(epollfd_, EPOLL_CTL_DEL, events[i].data.fd, NULL);
+					epoll_ctl(epollfd_, EPOLL_CTL_DEL, events[i].data.fd, nullptr);
 				}
 			}
 		}
@@ -113,26 +111,27 @@ void Client::start() {
 }
 
 void Client::connect_master() {
-	if ((master_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+	if ((master_sock_ = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
 		fprintf(stderr, "Socket Error is %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 	// 连接master
-	if (connect(master_sock,
+	if (connect(master_sock_,
 							(struct sockaddr *)(&master_addr),
 							sizeof(struct sockaddr)) == -1) {
-		LOG(ERROR) << "Connect master failed, ip: " + std::to_string(master_addr.sin_port);
+		LOG(ERROR) << std::string("Connect master failed, ip: ") + 
+									inet_ntoa(master_addr.sin_addr);
 		exit(EXIT_FAILURE);
 	}
 }
 
 void Client::check_cache_server_request_map() {
-	for(auto it = cache_server_request_.begin(); it != cache_server_request_.end(); ++it) {
+	for(auto it = request_map_.begin(); it != request_map_.end(); ++it) {
 		if (it->second.size() > 5) {
 			// 当有5个请求没有被响应时判定为宕机
 			LOG(INFO) << "The cache server may be down: " + it->first;
 
-			// 向master请求新的分布
+			// 将未被响应的key重新向master请求分布
 			for (auto it2 = it->second.begin(); it2 != it->second.end(); it2++) {
 				// TODO: 协商数据包格式
 				send_request_to_master("my_addr", "WRITE", *it2);
@@ -154,9 +153,9 @@ void Client::send_request_to_master(const std::string my_addr,
 																		const std::string mod,
 																		const std::string key) {
 	// TODO: 协商数据包格式
-	send(master_sock, key.data(), BUF_SIZE, 0);
+	send(master_sock_, key.data(), BUF_SIZE, 0);
 	
-	master_massage.sock = master_sock;
+	master_massage.sock = master_sock_;
 	master_massage.massage = key;
 	master_massage.timer = master_timer;
 	master_timer->reset();
@@ -171,32 +170,32 @@ void Client::send_request_to_cache_server(const std::string addr,
 
 	parse_str_addr(addr, cache_sever_addr);
 
-	if ((cache_sever_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+	if ((cache_sever_sock_ = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
 		LOG(ERROR) << "Socket error";
 		exit(EXIT_FAILURE);
 	}
 	std::string send_tmp = value != ""? key + "#" + value: key;
-	if (connect(cache_sever_sock,
+	if (connect(cache_sever_sock_,
 						(struct sockaddr *)(&cache_sever_addr),
 						sizeof(struct sockaddr)) == -1) {
 		LOG(ERROR) << "Connect cache server failed, addr: " + addr;
-		close(cache_sever_sock);
+		close(cache_sever_sock_);
 	} else {
-		send(cache_sever_sock, send_tmp.data(), send_tmp.size(), 0);
-		addfd(epollfd_, cache_sever_sock, true);
+		send(cache_sever_sock_, send_tmp.data(), send_tmp.size(), 0);
+		addfd(epollfd_, cache_sever_sock_, true);
 	}
 	
 	if (cache_server_timers.find(addr) != cache_server_timers.end()) {
-		cache_server_timers[addr].sock = cache_sever_sock;
+		cache_server_timers[addr].sock = cache_sever_sock_;
 		cache_server_timers[addr].massage = send_tmp;
 		cache_server_timers[addr].timer->reset();
 		cache_server_timers[addr].timer->start();
 	} else {
 		cache_server_massage.addr = addr;
-		cache_server_massage.sock = cache_sever_sock;
+		cache_server_massage.sock = cache_sever_sock_;
 		cache_server_massage.massage = send_tmp;
-		cache_server_massage.timer = new Timer(WAITING_TIME, false, NULL, NULL);
-		// cache_server_massage.timer = std::make_shared<Timer> (WAITING_TIME, false, NULL, NULL);
+		cache_server_massage.timer = 
+			std::make_shared<Timer> (WAITING_TIME, false, nullptr, nullptr);
 		cache_server_timers.insert(std::make_pair(addr, cache_server_massage));
 		cache_server_timers[addr].timer->setCallback(
 			std::bind(&Client::cache_server_resend, this, std::placeholders::_1));
@@ -233,13 +232,13 @@ void Client::dealwith_child(const char* message) {
 void Client::dealwith_master(const char* message) {
 	std::cout << message << std::endl;
 	master_timer->stop();
-	// message example: SUCCESS#key#ip:port / FAILED#key
+	// message example: MASTER#key#ip:port
 	std::vector<std::string> message_array;
 	split(message, message_array, '#');
 	std::string& state = message_array[0];
 	std::string& key = message_array[1];
 	
-	if (state == "SUCCESS") {
+	if (state == "MASTER") {
 		std::string& addr = message_array[2];
 		cache_lru->put(key, addr);  // 更新本地cache
 		
@@ -248,7 +247,7 @@ void Client::dealwith_master(const char* message) {
 		} else if (mode_ == 'w') {
 			send_request_to_cache_server(addr, key, strRand(20));
 		}
-	} else if (state == "FAILED") {
+	} else {
 		LOG(INFO) << "Request to master failed, key: " + key;
 	}
 }
@@ -270,41 +269,30 @@ void Client::dealwith_cache_server(const char* message) {
 
 void Client::add_item_to_request_map(const std::string cache_server_addr, 
 																		 const std::string key) {
-	if (cache_server_request_.find(cache_server_addr) != cache_server_request_.end()) {
-		auto it = std::find(cache_server_request_[cache_server_addr].begin(), 
-												cache_server_request_[cache_server_addr].end(), 
+	if (request_map_.find(cache_server_addr) != request_map_.end()) {
+		auto it = std::find(request_map_[cache_server_addr].begin(), 
+												request_map_[cache_server_addr].end(), 
 												key);
-		if (it == cache_server_request_[cache_server_addr].end()) {
-			cache_server_request_[cache_server_addr].emplace_back(key);
+		if (it == request_map_[cache_server_addr].end()) {
+			request_map_[cache_server_addr].emplace_back(key);
 		}
 	} else {
 		std::list<std::string> tmp {key};
-		cache_server_request_.insert(std::make_pair(cache_server_addr, tmp));
+		request_map_.insert(std::make_pair(cache_server_addr, tmp));
 	}
 }
 
 void Client::erase_item_from_request_map(const std::string cache_server_addr, 
 																				 const std::string key) {
-	if (cache_server_request_.find(cache_server_addr) != cache_server_request_.end()) {
-		auto it = std::find(cache_server_request_[cache_server_addr].begin(), 
-												cache_server_request_[cache_server_addr].end(), 
+	if (request_map_.find(cache_server_addr) != request_map_.end()) {
+		auto it = std::find(request_map_[cache_server_addr].begin(), 
+												request_map_[cache_server_addr].end(), 
 												key);
-		if (it != cache_server_request_[cache_server_addr].end()) {
-			cache_server_request_[cache_server_addr].erase(it);
+		if (it != request_map_[cache_server_addr].end()) {
+			request_map_[cache_server_addr].erase(it);
 		}
 	}
 }
-
-// void Client::master_resend(void * pData) {
-// 	std::string massage_tem = ((ReSendMassage*) pData)->massage;
-
-// 	LOG(INFO) << "Master timeout retransmission" + 
-// 							 massage_tem;
-
-// 	if (send(((ReSendMassage*) pData)->sock, massage_tem.data(), BUF_SIZE, 0) == -1) {
-// 		LOG(ERROR) << "Re-send to master error";
-// 	};
-// }
 
 void Client::cache_server_resend(void * pData) {
 	std::string massage_tem = ((ReSendMassage*) pData)->massage;

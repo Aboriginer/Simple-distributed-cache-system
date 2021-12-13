@@ -16,9 +16,9 @@ int main(int argc, char *argv[]) {
 	char mode;
 	int c;
 	static struct option long_options[] = {
-			{"capacity", required_argument, NULL, 'c'},
-			{"write", no_argument, NULL, 'w'},
-			{"read", no_argument, NULL, 'r'}};
+			{"capacity", required_argument, nullptr, 'c'},
+			{"write", no_argument, nullptr, 'w'},
+			{"read", no_argument, nullptr, 'r'}};
 	// 命令行解析
 	while (1) {
 		int opt_index = 0;
