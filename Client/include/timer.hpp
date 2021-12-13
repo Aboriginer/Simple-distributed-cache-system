@@ -14,7 +14,7 @@ class Timer
 public:
 	Timer();
 
-	Timer(int32_t timeout_ms, bool periodic, 
+	Timer(const int32_t timeout_ms, bool periodic, 
 				std::function<void (void *)> TimerCallback, void *data);
 
 	~Timer() { pTimers.remove(this); }

@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
 		std::string temp = recv_buff;
 
 		// message example: SUCCESS/FAILED#key#ip:port
-		strcpy(send_buff, ("SUCCESS#" + temp + "#127.0.0.1:8887").data()); //CacheSever IP
+		strcpy(send_buff, ("MASTER#" + temp + "#127.0.0.1:8887").data()); //CacheSever IP
 		send(clientfd, send_buff, BUF_SIZE, 0);
 
 		memset(recv_buff, 0, sizeof(recv_buff));

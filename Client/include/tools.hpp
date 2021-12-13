@@ -12,6 +12,7 @@ void addfd(int epollfd, int fd, bool enable_et);
 // 拆分string，flag：分隔符
 void split(const std::string& s,std::vector<std::string>& sv,const char flag = '#');
 
+// 解析addr string, eg. "127.0.0.1:8888"
 void parse_str_addr(const std::string str_addr, sockaddr_in& addr);
 
 #endif
