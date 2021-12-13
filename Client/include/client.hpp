@@ -45,6 +45,7 @@ struct ReSendMassage {
 	int sock;
 	std::string massage;
 	Timer* timer;
+	// std::shared_ptr<Timer> timer;
 };
 
 class Client {
@@ -121,6 +122,7 @@ private:
 
 	// master重传定时器
 	Timer *master_timer;
+	// std::shared_ptr<Timer> master_timer;
 
 	ReSendMassage master_massage;
 	ReSendMassage cache_server_massage;

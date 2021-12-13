@@ -34,11 +34,20 @@ void Client::init() {
 	// addfd(epollfd_, master_sock, true);
 	addfd(epollfd_, master_sock, false);
 	addfd(epollfd_, pipe_fd_[0], true);
-
+	// master_timer = std::make_shared<Timer> (WAITING_TIME, false, NULL, (void*)&master_massage);
 	master_timer = new Timer(WAITING_TIME, false, NULL, (void*)&master_massage);
-	master_timer->setCallback(std::bind(&Client::master_resend, 
-																			this, 
-																			std::placeholders::_1));
+	// master_timer->setCallback(std::bind(&Client::master_resend, 
+	// 																		this, 
+	// 																		std::placeholders::_1));
+	// master超时重传
+	master_timer->setCallback([](void * pData){
+		std::string massage_tem = ((ReSendMassage*) pData)->massage;
+		LOG(INFO) << "Master timeout retransmission" + 
+								massage_tem;
+		if (send(((ReSendMassage*) pData)->sock, massage_tem.data(), BUF_SIZE, 0) == -1) {
+			LOG(ERROR) << "Re-send to master error";
+		};
+	});
 }
 
 void Client::start() {
@@ -187,6 +196,7 @@ void Client::send_request_to_cache_server(const std::string addr,
 		cache_server_massage.sock = cache_sever_sock;
 		cache_server_massage.massage = send_tmp;
 		cache_server_massage.timer = new Timer(WAITING_TIME, false, NULL, NULL);
+		// cache_server_massage.timer = std::make_shared<Timer> (WAITING_TIME, false, NULL, NULL);
 		cache_server_timers.insert(std::make_pair(addr, cache_server_massage));
 		cache_server_timers[addr].timer->setCallback(
 			std::bind(&Client::cache_server_resend, this, std::placeholders::_1));
@@ -285,17 +295,16 @@ void Client::erase_item_from_request_map(const std::string cache_server_addr,
 	}
 }
 
-void Client::master_resend(void * pData) {
-	std::string massage_tem = ((ReSendMassage*) pData)->massage;
+// void Client::master_resend(void * pData) {
+// 	std::string massage_tem = ((ReSendMassage*) pData)->massage;
 
-	LOG(INFO) << "Master timeout retransmission" + 
-							 massage_tem;
+// 	LOG(INFO) << "Master timeout retransmission" + 
+// 							 massage_tem;
 
-	if (send(((ReSendMassage*) pData)->sock, 
-					 massage_tem.data(), BUF_SIZE, 0) == -1) {
-		LOG(ERROR) << "Re-send to master error";
-	};
-}
+// 	if (send(((ReSendMassage*) pData)->sock, massage_tem.data(), BUF_SIZE, 0) == -1) {
+// 		LOG(ERROR) << "Re-send to master error";
+// 	};
+// }
 
 void Client::cache_server_resend(void * pData) {
 	std::string massage_tem = ((ReSendMassage*) pData)->massage;
