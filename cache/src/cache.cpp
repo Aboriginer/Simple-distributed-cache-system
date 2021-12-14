@@ -175,9 +175,9 @@ void Cache::Client_chat() {
 
                     //这里用一把锁来管理Replica的缓冲区。
                     // TODO : 记得在Replica那边也要试图访问这个锁
+                    kv_update_flag = true;
                     kv_mutex.lock();
                     kv_to_replica.clear();
-                    kv_update_flag = true;
                     kv_to_replica += recv_buff_client;
                     kv_mutex.unlock();
                     //移除事件
@@ -309,11 +309,11 @@ void Cache::ReadFromMaster(std::string message) {
     std::string head = message.substr(0,1);   //P或者R
     std::lock_guard<std::mutex> guard(status_mutex);
     if(head == "K"){
-       dying_cache_IP_ = message.substr(2,spear);
-       dying_cache_Port = message.substr(spear + 1, message.size());
-       if(dying_cache_IP_ == local_cache_IP_ && dying_cache_Port == port_for_cache_){
-           status_ = "K";
-       }
+        dying_cache_IP_ = message.substr(2,spear);
+        dying_cache_Port = message.substr(spear + 1, message.size());
+        if(dying_cache_IP_ == local_cache_IP_ && dying_cache_Port == port_for_cache_){
+            status_ = "K";
+        }
         update_cache(dying_cache_IP_, dying_cache_Port, "K");
     }else if(head == "N"){
         std::string neo_cache_IP = message.substr(2,spear);
@@ -358,6 +358,7 @@ void Cache::cache_pass(){
         }
     }else if(status_ == "P"){
         from_single_cache(dying_cache_IP_, dying_cache_Port);
+        cache_list_update_flag = true;
     }else if(status_ == "R"){
         from_single_cache(dying_cache_IP_, dying_cache_Port);
     }
@@ -401,7 +402,10 @@ void Cache::replica_chat() {
                         bzero(send_buff_replica, BUF_SIZE);
                         // TODO:写入更新的cache_list
                         send_message = "#"; // 第一个字符是'#', 则表示收到的是cache_list
-                        send_message += "cache_list";
+                        //现在开始传输哈希表
+                        for(auto it : cache_list){
+                            send_message += it.first + "#" +it.second;
+                        }
                         std::cout << "Send cache_list to replica cache, fd = " << clnt_sock << std::endl;
                         strcpy(send_buff_replica, send_message.data());
                         send(clnt_sock, send_buff_replica, BUF_SIZE, 0);
@@ -445,9 +449,49 @@ void Cache::replica_chat() {
                 // TODO:解析收到的recv_message，写入备份的LRU中
                 if (recv_message[0] == '#') {   // 收到更新的cache_list
                     std::cout << "Receive cache_list" << std::endl;
+                    std::vector<std::string> ip, port;
+                    std::string tmp;
+                    int count  = 0;
+                    for(int i = 1; i < recv_message.size(); i++){
+                        char single = recv_message[i];
+                        if(single != '#'){
+                            tmp += single;
+                        }else{
+                            if(count % 2 == 0) ip.push_back(tmp);
+                            else port.push_back(tmp);
+                            tmp.clear();
+                            count++;
+                        }
+                    }
+                    port.push_back(tmp);
+                    if(ip.size() != port.size()){
+                        std::cout<<"wrong message."<<std::endl;
+                    }else{
+                        for(int i = 0; i < ip.size(); i++){
+                            other_Cache.insert({ip[i], port[i]});
+                        }
+                    }
                 }
                 else{   // 收到更新的key/key#value
                     std::cout << "Receive key/key#value" << std::endl;
+                    int spear = 0;
+                    for (int i = 0; i < recv_message.size(); i++) {
+                        if (recv_message[i] != '#') {
+                            ++spear;
+                        } else {
+                            break;
+                        }
+                    }
+                    if(spear == recv_message.size()){
+                        std::string key = recv_message;
+                        if(MainCache.check(key) > 0){
+                            MainCache.get(key);
+                        }
+                    }else{
+                        std::string key = recv_message.substr(0, spear);
+                        std::string val = recv_message.substr(spear + 1, recv_message.size());
+                        MainCache.put(key, val);
+                    }
                 }
             }
             close(clnt_sock);
@@ -464,7 +508,7 @@ void Cache::cal_hash_key() {
     }
     cache_hash.initialize(caches.size(), 100);
     std::vector<std::string> all_keys = MainCache.all_key();
-    
+
     std::vector<size_t> all_index;
     if(otherIP.size() > 0) otherIP.clear();
     if(otherPort.size() > 0) otherPort.clear();
@@ -480,17 +524,15 @@ void Cache::cal_hash_key() {
 
     out_key = all_keys;
 }
- /*在调用server_socket函数前写入以下内容即可：
-    int clnt_sock;
-    struct sockaddr_in clnt_adr;
-    socklen_t clnt_adr_sz;
-
-    clnt_adr_sz = sizeof(clnt_adr);
-
-    clnt_sock = accept(serv_sock, (struct sockaddr*)&clnt_adr, &clnt_adr_sz);
-    std::cout << "client connection from:" << inet_ntoa(clnt_adr.sin_addr) << ":"
-              << ntohs(clnt_adr.sin_port) << ", client_fd = " << clnt_sock << std::endl;
- */
+/*在调用server_socket函数前写入以下内容即可：
+   int clnt_sock;
+   struct sockaddr_in clnt_adr;
+   socklen_t clnt_adr_sz;
+   clnt_adr_sz = sizeof(clnt_adr);
+   clnt_sock = accept(serv_sock, (struct sockaddr*)&clnt_adr, &clnt_adr_sz);
+   std::cout << "client connection from:" << inet_ntoa(clnt_adr.sin_addr) << ":"
+             << ntohs(clnt_adr.sin_port) << ", client_fd = " << clnt_sock << std::endl;
+*/
 int server_socket(std::string server_IP, std::string server_port) {
     int serv_sock;
     struct sockaddr_in serv_adr;
@@ -592,7 +634,7 @@ void Cache::initial() {
         is_initialed = ERROR_INIT;   //没有收到任何消息,初始化错误
         return;
     }
-    
+
     //解包
     int count = 0;
     vector<std::string> ip, port;
@@ -625,7 +667,7 @@ void Cache::initial() {
         other_Cache.insert(pair);
     }
     std::cout<<"write successful."<<std::endl;
-    is_initialed = SUCCESS_INIT;    
+    is_initialed = SUCCESS_INIT;
     return;
 }
 // 注册新的fd到epollfd中
