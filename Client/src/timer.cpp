@@ -31,7 +31,7 @@ void Timer::createTimer(const int32_t timeout_ms, bool _periodic,
 
 	running = false;
 
-	// 将 timer_handler 作为超时信号 SIGVTALRM 的信号处理函数*/
+	// 将 timer_handler 作为超时信号 SIGVTALRM 的信号处理函数
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = &timer_handler;
 	sigaction(SIGALRM, &sa, nullptr);

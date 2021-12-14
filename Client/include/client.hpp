@@ -29,21 +29,20 @@ const int MASTER_PORT = 8889;
 const int CACHESEVER_PORT = 8887;
 
 const int KEY_LENGTH = 3;
-const int VALUE_LENGTH = 10;
+const int VALUE_LENGTH = 20;
 
 const int MAX_EVENT_NUMBER = 100;
 const int EPOLL_SIZE = 100;
 
-const int REQUEST_INTERVAL = 1000;  // 产生读写请求间隔，单位 ms
+const int REQUEST_INTERVAL = 3000;  // 产生读写请求间隔，单位 ms
 
 const int WAITING_TIME = 5;  // 应用层超时重传等待时间，单位 100ms
 
 // 超时重传回调函数接收的参数
 struct ReSendMassage {
-	std::string addr;
 	int sock;
+	std::string addr;
 	std::string massage;
-	// Timer* timer;
 	std::shared_ptr<Timer> timer;
 };
 
@@ -72,27 +71,25 @@ public:
 
 	void send_key_to_father(const std::string key, const char mode);
 
-	void send_request_to_cache_server(const std::string addr,
-																		const std::string key, 
+	void send_request_to_cache_server(const std::string &addr,
+																		const std::string &key, 
 																		const std::string value = "");
 
-	void send_request_to_master(const std::string my_addr,
-															const std::string mod,
-															const std::string key);
+	void send_request_to_master(const std::string &key);
 
-	void add_item_to_request_map(const std::string cache_server_addr, 
-															 const std::string key);
+	void add_item_to_request_map(const std::string &cache_server_addr, 
+															 const std::string &key);
 
-	void erase_item_from_request_map(const std::string cache_server_addr, 
-																	 const std::string key);
+	void erase_item_from_request_map(const std::string &cache_server_addr, 
+																	 const std::string &key);
 
-	void cache_server_resend(void * pData);
+	void cache_server_resend(void* pData);
 
 private:
 	// client的模式 -w write；-r read
 	char mode_;
 
-	epoll_event events[MAX_EVENT_NUMBER];
+	epoll_event events_[MAX_EVENT_NUMBER];
 
 	int epollfd_;
 
@@ -104,28 +101,28 @@ private:
 	int pipe_fd_[2];
 
 	// 通信缓冲区
-	char message[BUF_SIZE];
+	char message_[BUF_SIZE];
 
-	struct sockaddr_in master_addr;
-	struct sockaddr_in cache_sever_addr;
+	struct sockaddr_in master_addr_;
+	struct sockaddr_in cache_sever_addr_;
 
 	// 本地Cache缓存条目大小
 	int cache_size_local_;
 
 	// 本地Cache缓存
-	std::shared_ptr<cache::lru_cache<std::string, std::string>> cache_lru;
+	std::shared_ptr<cache::lru_cache<std::string, std::string>> local_lru_;
 
 	// 管理向cache_server发送的请求,ip-list key
 	std::unordered_map<std::string, std::list<std::string>> request_map_;
 
 	// master重传定时器
-	std::shared_ptr<Timer> master_timer;
+	std::shared_ptr<Timer> master_timer_;
 
-	ReSendMassage master_massage;
-	ReSendMassage cache_server_massage;
+	ReSendMassage master_massage_;
+	ReSendMassage cache_server_massage_;
 
 	// cache server重传定时器表
-	std::unordered_map<std::string, ReSendMassage> cache_server_timers;
+	std::unordered_map<std::string, ReSendMassage> cache_server_timers_;
 };
 
 #endif

@@ -6,7 +6,6 @@
 #include <functional>
 #include <list>
 
-// typedef void (*TimerExpired)(void *);
 const int TIME_UNIT  = 100000;  // 定时最小间隔，单位us
 
 class Timer
@@ -33,8 +32,9 @@ public:
 
 	void setPeriodic(bool isPeriodic) { periodic = isPeriodic; }
 
-	// void setCallback(TimerExpired TimerCallback) { callback = TimerCallback; }
-	void setCallback(std::function<void (void *)> TimerCallback) { callback = TimerCallback; }
+	void setCallback(std::function<void (void *)> TimerCallback) { 
+		callback = TimerCallback;
+	}
 
 	void setData(void *);
 
