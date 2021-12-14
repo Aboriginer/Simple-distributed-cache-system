@@ -20,32 +20,6 @@ Cache::Cache(int cache_size_local, std::string status, std::string local_cache_I
     is_initialed = 0;
 }
 
-//void Cache::Start() {
-//
-//    auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
-//    std::thread for_master_Heartbeat(Heartbeat_bind);
-//
-//    auto init_bind = std::bind(&Cache::init,  this);
-//    std::thread for_init(init_bind);
-//    for_init.join();
-//
-//    if (init_status == 1) {
-//        auto Client_chat_bind = std::bind(&Cache::Client_chat, this);
-////    auto cache_pass_bind = std::bind(&Cache::cache_pass, this);
-//
-////    std::thread for_master_chat(Master_chat);
-//        std::thread for_client(Client_chat_bind);
-////    std::thread for_cache_pass(cache_pass_bind);
-////    std::thread for_replica(ToReplica);
-//
-//
-////    for_master_chat.join();
-//        for_client.join();
-////    for_cache_pass.join();
-////    for_replica.join();
-//    }
-//    for_master_Heartbeat.join();
-//}
 
 void Cache::Start() {
     auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
@@ -69,42 +43,12 @@ void Cache::Start() {
     std::thread for_cache(Cache_pass_bind);
     std::thread for_replica(Cache_replica_bind);
 
-
-
     for_replica.join();
     for_cache.join();
     for_client.join();
     for_master_Heartbeat.join();
 }
 
-
-// void Cache::Heartbeat() {
-//     Timer *timer = new Timer(1000, false, NULL, NULL); //500ms上传一次心跳包
-//     // 向master发送的心跳包
-//     char send_buff_master[BUF_SIZE];
-
-//     std::string master_port = std::to_string(MASTER_PORT);
-//     int cache_master_sock = client_socket(MASTER_IP, master_port);
-
-//     while (true) {
-//         // 发送心跳
-//         std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + status_;
-
-//         strcpy(send_buff_master, heart_message.data());
-
-//         std::cout << "Send message:" << send_buff_master << std::endl;
-
-//         send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
-
-//         std::cout << "Heartbeat successfully!" << std::endl;
-//         bzero(send_buff_master, BUF_SIZE);
-
-//         timer->start();
-//         while(timer->isRunning());
-//         timer->stop();
-//     }
-//     close(cache_master_sock);
-// }
 
 void Cache::Heartbeat() {
     static auto timer = std::make_shared<Timer> (500, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
@@ -190,14 +134,14 @@ void Cache::Client_chat() {
     addfd(epfd, serv_client_sock, true);
     // 开辟共享内存
 
-
     while (true) {
         // epoll_events_count表示就绪事件数目
         int epoll_events_count = epoll_wait(epfd, client_events, EPOLL_SIZE, -1);
 
         if (epoll_events_count < 0) {
             perror("epoll failure");
-            break;
+//            break;
+            continue;
         }
 
         for (int i = 0; i < epoll_events_count; i++) {
@@ -225,16 +169,15 @@ void Cache::Client_chat() {
                     future_queue.emplace(std::move(future));
                     int targetPort = get_port(future_queue.front());
                     memcpy(send_buff_client, buffer.c_str(), buffer.size());
-//                    //向端口传出数据：SUCCESS/FAILED#key#ip:port(cache server)
+                    //向端口传出数据：SUCCESS/FAILED#key#ip:port(cache server)
                     send(client_events[targetPort].data.fd, send_buff_client, BUF_SIZE, 0);
                     std::cout << "========================================return value:" << send_buff_client << std::endl;
 
-                    // TODO:1.client关闭后cache被强制关闭，可能需改进send
-                    // TODO:2.将最新的状态写入缓冲区，用于Replica
                     //这里用一把锁来管理Replica的缓冲区。
                     // TODO : 记得在Replica那边也要试图访问这个锁
                     kv_mutex.lock();
                     kv_to_replica.clear();
+                    kv_update_flag = true;
                     kv_to_replica += recv_buff_client;
                     kv_mutex.unlock();
                     //移除事件
@@ -469,8 +412,7 @@ void Cache::replica_chat() {
                         std::cout << "Need to write key/key#value" << std::endl;
                         send_message.clear();
                         bzero(send_buff_replica, BUF_SIZE);
-                        // TODO:写入更新的key/key#value
-                        send_message = "key#value";
+                        // TODO:kv_update_flag这里不用加锁吧？
                         kv_mutex.lock();
                         send_message = kv_to_replica;
                         kv_mutex.unlock();
@@ -494,12 +436,13 @@ void Cache::replica_chat() {
             std::cout << "Server connection from:";
             int clnt_sock = client_socket(target_IP_, target_port_);
             while (true) {
+                if (status_ != "R") break;  // 备份cache转正
                 recv_message.clear();
                 bzero(recv_buff_primary, BUF_SIZE);
                 int len = recv(clnt_sock, recv_buff_primary, BUF_SIZE, 0);
                 recv_message = std::string(recv_buff_primary);
                 std::cout << "Receive from primary cache:" << recv_message << std::endl;
-                // TODO:解析收到的recv_message
+                // TODO:解析收到的recv_message，写入备份的LRU中
                 if (recv_message[0] == '#') {   // 收到更新的cache_list
                     std::cout << "Receive cache_list" << std::endl;
                 }
