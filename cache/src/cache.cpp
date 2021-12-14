@@ -78,32 +78,49 @@ void Cache::Start() {
 }
 
 
+// void Cache::Heartbeat() {
+//     Timer *timer = new Timer(1000, false, NULL, NULL); //500ms上传一次心跳包
+//     // 向master发送的心跳包
+//     char send_buff_master[BUF_SIZE];
+
+//     std::string master_port = std::to_string(MASTER_PORT);
+//     int cache_master_sock = client_socket(MASTER_IP, master_port);
+
+//     while (true) {
+//         // 发送心跳
+//         std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + status_;
+
+//         strcpy(send_buff_master, heart_message.data());
+
+//         std::cout << "Send message:" << send_buff_master << std::endl;
+
+//         send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
+
+//         std::cout << "Heartbeat successfully!" << std::endl;
+//         bzero(send_buff_master, BUF_SIZE);
+
+//         timer->start();
+//         while(timer->isRunning());
+//         timer->stop();
+//     }
+//     close(cache_master_sock);
+// }
+
 void Cache::Heartbeat() {
-    Timer *timer = new Timer(1000, false, NULL, NULL); //500ms上传一次心跳包
-    // 向master发送的心跳包
-    char send_buff_master[BUF_SIZE];
-
-    std::string master_port = std::to_string(MASTER_PORT);
-    int cache_master_sock = client_socket(MASTER_IP, master_port);
-
-    while (true) {
-        // 发送心跳
+    static auto timer = std::make_shared<Timer> (500, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
+    timer->setCallback([this](void * pdata){
+        // 向master发送的心跳包
+        char send_buff_master[BUF_SIZE];
+        std::string master_port = std::to_string(MASTER_PORT);
+        static int cache_master_sock = client_socket(MASTER_IP, master_port);
         std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + status_;
-
         strcpy(send_buff_master, heart_message.data());
-
         std::cout << "Send message:" << send_buff_master << std::endl;
-
         send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
-
         std::cout << "Heartbeat successfully!" << std::endl;
         bzero(send_buff_master, BUF_SIZE);
-
-        timer->start();
-        while(timer->isRunning());
-        timer->stop();
-    }
-    close(cache_master_sock);
+    };
+    timer->start();
 }
 
 
