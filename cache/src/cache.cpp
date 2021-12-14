@@ -109,7 +109,7 @@ void Cache::Start() {
 void Cache::Heartbeat() {
     static auto timer = std::make_shared<Timer> (500, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
     timer->setCallback([this](void * pdata){
-        // 向master发送的心跳包
+        // 向master发送的心跳包
         char send_buff_master[BUF_SIZE];
         std::string master_port = std::to_string(MASTER_PORT);
         static int cache_master_sock = client_socket(MASTER_IP, master_port);
@@ -119,7 +119,7 @@ void Cache::Heartbeat() {
         send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
         std::cout << "Heartbeat successfully!" << std::endl;
         bzero(send_buff_master, BUF_SIZE);
-    };
+    });
     timer->start();
 }
 
