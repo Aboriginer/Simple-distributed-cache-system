@@ -47,8 +47,13 @@ class Master {
 public:
     ConsistentHash cacheAddrHash;
 
+    unordered_map<string, time_t> cacheAddrMap;
     std::unordered_map<int, struct fdmap *> clients_list;
     std::vector<int> fd_node;
+
+    stack<int> pcache;
+    stack<int> rcache;
+    int epoll_events_count;
     // 有参构造
     Master();
     // 启动服务器端
@@ -65,7 +70,7 @@ public:
     string handleClientMessage(string msg);
 
     void handleHeartBeatResponse(string msg);
-    bool heartBeatDetect(string cacheServerAddr);
+    bool heartBeatDetect(int fd);
     //================================================================================
 private:
     void start_cache();
@@ -73,6 +78,7 @@ private:
     void periodicDetectCache();
 
     void updateKeyCacheMapByCacheReq(string recv_buff_client);
+    void shrinkageCapacity();
     //================================================================================
 //    vector<string> split(string s, string seperator);
 };
