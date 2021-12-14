@@ -35,7 +35,6 @@
 // #define CACHE_PORT 
 #define CACHE_PORT 8889
 
-
 const int MAX_EVENT_NUMBER = 10000; //最大事件数
 const int EPOLL_SIZE = 20;  // epoll支持的最大句柄数
 const int MAX_THREADS_NUMBER = 10; // 最大线程数量
@@ -45,42 +44,43 @@ using namespace std;
 class Master {
 
 public:
+    // 一致性哈希类定义
     ConsistentHash cacheAddrHash;
-
+    // cache是否存活的map
     unordered_map<string, time_t> cacheAddrMap;
+    // 接入的cache列表：fd-cache详细信息
     std::unordered_map<int, struct fdmap *> clients_list;
+    // 接入的cache对应的fd列表：
     std::vector<int> fd_node;
-
+    // 主cache？这的备注没有粘过来 T T
     stack<int> pcache;
+    // 备份cache？
     stack<int> rcache;
     int epoll_events_count;
-    // 有参构造
+    // 参构造函数
     Master();
     // 启动服务器端
     void Start();
     void Close();
-    //================================================================================
-
-
+    // 心跳存活的时间间隔
     uint32_t heartBeatInterval = 5 ;//???
-    uint32_t a = 0;
 
-    // void handleMessage(cMessage* msg);
-
-    string handleClientMessage(string msg);
-
-    void handleHeartBeatResponse(string msg);
-    bool heartBeatDetect(int fd);
-    //================================================================================
 private:
+    // cache接入
     void start_cache();
+    // client接入
     void start_client();
+    // 周期性地检测cache是否存活
     void periodicDetectCache();
-
-    void updateKeyCacheMapByCacheReq(string recv_buff_client);
+    // 缩容函数
     void shrinkageCapacity();
-    //================================================================================
-//    vector<string> split(string s, string seperator);
+    // 处理client信息（读写请求响应）
+    string handleClientMessage(string msg);
+    // 处理cache心跳信息（更新时间戳）
+    void handleHeartBeatResponse(string msg);
+    // 判断一个cache是否存活
+    bool heartBeatDetect(int fd);
+
 };
 
 // / 注册新的fd到epollfd中

@@ -260,12 +260,10 @@ void Master::start_cache() {
                         // 假设检测到一个新上线的cache
                         int index = fd_node.size()-1;// 获取它的实际节点索引
                         cacheAddrHash.addNode(index);// 在哈希部分增加节点
-                        // N#new_ip#new_port
                         int fd = fd_node[index];// 获取fd的值
                         string cacheServerAddr = clients_list[fd]->ip_port;// 找到fd对应的ip和port
-                        cout<<"cacheServerAddr"<<cacheServerAddr<<endl;
+                        // N#new_ip#new_port
                         string extendmsg = "N#"+cacheServerAddr;
-                        cout<<"extendmsg:"<<extendmsg<<endl;
                         // 然后把这个extendmsg发给所有的cache====广播
                         // 广播新上线的cache
                         cout<<"send msg \'"<< extendmsg <<"\' to all cache"<<endl; 
@@ -275,7 +273,7 @@ void Master::start_cache() {
                             send(fdi, send_buff_client, BUF_SIZE, 0);
                         }
                         // 向新上线的cache单独发送所有cache的IP和port
-
+                        // ip1#port1#ip2#port2...
                         string allcache;
                         for(auto fdi : fd_node){
                             allcache = allcache + "#" + clients_list[fdi]->ip_port;
@@ -304,14 +302,15 @@ void Master::start_cache() {
                     handleHeartBeatResponse(recv_buff_client);
                     //#################################################
                 }
-                else if (pch == 'g') {  // 更新请求："g#ip#port#key"
-                    std::cout << "update KeyCacheMap By CacheReq:" << recv_buff_client << std::endl;
-                    updateKeyCacheMapByCacheReq(recv_buff_client);
-                }
+                // else if (pch == 'g') {  // 更新请求："g#ip#port#key"
+                //     std::cout << "update KeyCacheMap By CacheReq:" << recv_buff_client << std::endl;
+                //     updateKeyCacheMapByCacheReq(recv_buff_client);
+                // }
             }
         }
     }
 }
+
 
 void Master::Start() {
     cacheAddrHash.initialize(0,100);
@@ -336,19 +335,17 @@ void Master::Start() {
 void Master::shrinkageCapacity(){
     // 假设检测到一个cache要下线====每次缩容都缩最后一个cache吧 = =|||
     char c;
-    
     char send_buff_shink[BUF_SIZE];
     while(true){
-        c = getchar();
+        c = getchar();// 如果键盘输入's'——>则认为要缩容
         if(c=='s'){
-            cout<< " shrink cache"<< endl;
-            int index = fd_node.size()-1;
+            cout<< " shrink cache "<< endl;
+            int index = fd_node.size()-1;//缩容减少的是最后一个cache
             cacheAddrHash.deleteNode(index);
             int fd = fd_node[index];// 获取fd的值
-            // cout<<"fd:"<<fd<<endl;
             // 根据fd找到对应的ip：port
-            string cacheServerAddr = clients_list[fd]->ip_port; //根据fd获取ip:port
-            // cout<<"cacheServerAddr"<<cacheServerAddr<<endl;
+            string cacheServerAddr = clients_list[fd]->ip_port; 
+            // 格式：K#killed_ip#killed_port
             string shrinkmsg = "K#"+cacheServerAddr;
             cout<<"send shrinkmsg:"<<shrinkmsg << "to all cache"<<endl;
             // 然后把这个shrinkmsg发给所有的cache
@@ -359,36 +356,28 @@ void Master::shrinkageCapacity(){
             }
             fd_node.pop_back();
             auto addr = clients_list.erase(fd);
-            // cout<<"addr"<<addr<<endl;
-            // epoll_events_count--;
-            // cout<<"epoll_events_count-shrink"<<epoll_events_count<<endl;
-            // client_events
-            // 缩容里主备分部分需要做的内容
+            // 这里有两个问题：
+            // 1 删除的信息可能没有同步到其他线程——>我不会 T T [所以我让收心跳包那里就直接continue了]
+            // 2 缩容里主备分部分需要做的内容
         }
     }
 }
 
 string Master::handleClientMessage(string msg){
     // 获得虚拟节点对应的值
-    cout<< cacheAddrHash.key2Index.size()<<endl;
-    cout<< "msg:"<<msg<<endl;
+    cout<<"handle client message: the key is "<< msg <<endl;
     size_t vir_node = cacheAddrHash.GetServer(msg.c_str());
     cout<<"vir_node:" <<vir_node<<"\t";
     // 虚拟节点对应的真实节点的索引
     int index = cacheAddrHash.key2Index[vir_node];
-    cout<<"index:" <<index<<"\t";
-    // cout<<"the size of key2index:"<<cacheAddrHash.key2Index.size()<<endl;
     // 通过fd_node根据返回的index索引到cache对应的fd
     int fd = fd_node[index];
-    cout<<"fd:"<<fd<<"\t";
     // 根据fd找到对应的ip：port
     string cacheServerAddr1 = clients_list[fd]->ip_port;
-    cout<<cacheServerAddr1<<endl;
-    
     // 返回格式为ip:port?
     vector<string> vtstr = split(cacheServerAddr1, "#");
     string cacheServerAddr = vtstr[0]+":"+vtstr[1];
-    cout<<cacheServerAddr<<endl;
+    cout<<"the cacheAddr is: "<<cacheServerAddr<<endl;
     return cacheServerAddr;
 }
 
@@ -511,10 +500,10 @@ void Master::periodicDetectCache(){
 //     cacheAddrHash.deleteNode(index);
 // }
 
-void Master::updateKeyCacheMapByCacheReq(string msg){
-    vector<string> vtmsg = split(msg, "#");
-    string cacheServerAddrStr = vtmsg[1];
-    string cacheServerPortStr = vtmsg[2];
-    string key = vtmsg[3];
-    cout<<"the key is update: key = " << key << "cache: "<<cacheServerAddrStr<<":"<<cacheServerPortStr<<endl;
-}
+// void Master::updateKeyCacheMapByCacheReq(string msg){
+//     vector<string> vtmsg = split(msg, "#");
+//     string cacheServerAddrStr = vtmsg[1];
+//     string cacheServerPortStr = vtmsg[2];
+//     string key = vtmsg[3];
+//     cout<<"the key is update: key = " << key << "cache: "<<cacheServerAddrStr<<":"<<cacheServerPortStr<<endl;
+// }

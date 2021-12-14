@@ -1,7 +1,7 @@
 # Cache Server communication
 
 ## 编译方法
-g++ -pthread cache_main.cpp cache.cpp cache.h threadPool.hpp LRU_cache.hpp Timer.hpp Timer.cpp -o cache_main
+ g++ -pthread cache_main.cpp cache.cpp cache.h threadPool.hpp LRU_cache.hpp Timer.hpp Timer.cpp ConsistentHash.cpp ConsistentHash.hpp -o cache_main
 
 (有空写个makefile)
 ## TODO
