@@ -68,10 +68,10 @@ void Client::start() {
 					LOG(ERROR) << "Open key_list file failed";
 				}
 				while(!key_list_file.eof()) { 
+					usleep(REQUEST_INTERVAL * 1000);
 					key_list_file >> key;
 					send_key_to_father(key, 'r');
 					std::cout << "Read from key_list file, key = " << key << std::endl;
-					usleep(REQUEST_INTERVAL * 1000);
 				} 
 				key_list_file.close();
 			} else if (mode_ == 'w') {
@@ -103,7 +103,7 @@ void Client::start() {
 					// cache server消息，message example: SUCCESS/FAILED#key#ip:port 
 					read(events_[i].data.fd, message_, BUF_SIZE);
 					dealwith_cache_server(message_);
-					close(events_[i].data.fd);
+					close(events_[i].data.fd);  // DEBUG
 					epoll_ctl(epollfd_, EPOLL_CTL_DEL, events_[i].data.fd, nullptr);
 				}
 			}
@@ -180,6 +180,7 @@ void Client::send_request_to_cache_server(const std::string &addr,
 		LOG(ERROR) << "Connect cache server failed, addr: " + addr;
 		close(cache_sever_sock_);
 	} else {
+		usleep(10 * 1000);  // DEBUG
 		send(cache_sever_sock_, send_tmp.data(), send_tmp.size(), 0);
 		addfd(epollfd_, cache_sever_sock_, true);
 	}
@@ -229,8 +230,11 @@ void Client::dealwith_child(const char* message) {
 }
 
 void Client::dealwith_master(const char* message) {
-	std::cout << message << std::endl;
+	std::cout << "Master to client: "<< message << std::endl;
 	master_timer_->stop();
+	if(!message) {
+		return;
+	}
 	// message example: MASTER#key#ip:port
 	std::vector<std::string> message_array;
 	split(message, message_array, '#');
@@ -252,6 +256,9 @@ void Client::dealwith_master(const char* message) {
 }
 
 void Client::dealwith_cache_server(const char* message) {
+	if(!message) {
+		return;
+	}
 	// message example: SUCCESS/FAILED#key#ip:port
 	std::vector<std::string> message_array;
 	split(message, message_array, '#');
@@ -261,7 +268,7 @@ void Client::dealwith_cache_server(const char* message) {
 	if (state == "SUCCESS" || state == "FAILED") {
 		erase_item_from_request_map(addr, key);
 		cache_server_timers_[addr].timer->stop();
-		std::cout << "Request to cache server" + state + " key = " + key 
+		std::cout << "Request to cache server " + state + " key = " + key 
 							<< " addr = " + addr << std::endl;
 	}
 }
