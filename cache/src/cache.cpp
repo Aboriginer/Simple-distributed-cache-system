@@ -8,6 +8,7 @@ Cache::Cache(int cache_size_local, std::string status, std::string local_cache_I
              std::string port_for_cache) {
     cache_size_local_ = cache_size_local;
     status_ = status;
+    pr_status_ = status;
     local_cache_IP_ = local_cache_IP;
     port_for_client_ = port_for_client;
     port_for_cache_ = port_for_cache;
@@ -23,16 +24,16 @@ Cache::Cache(int cache_size_local, std::string status, std::string local_cache_I
 void Cache::Start() {
     auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
     auto Client_chat_bind = std::bind(&Cache::Client_chat, this);
-    auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
-    auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
+//    auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
+//    auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
 
     std::thread for_master_Heartbeat(Heartbeat_bind);
     std::thread for_client(Client_chat_bind);
-    std::thread for_cache(Cache_pass_bind);
-    std::thread for_replica(Cache_replica_bind);
+//    std::thread for_cache(Cache_pass_bind);
+//    std::thread for_replica(Cache_replica_bind);
 
-    for_replica.join();
-    for_cache.join();
+//    for_replica.join();
+//    for_cache.join();
     for_client.join();
     for_master_Heartbeat.join();
 }
@@ -86,14 +87,52 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
     is_initialed = SUCCESS_INIT;
 }
 
+//void Cache::Heartbeat() {
+//    static auto timer = std::make_shared<Timer> (500, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
+//    timer->setCallback([this](void * pdata){
+//        bool initial_flag = false;
+//        // 向master发送的心跳包
+//        char send_buff_master[BUF_SIZE], recv_buff_master[BUF_SIZE];
+//        std::string master_port = std::to_string(MASTER_PORT);
+//        static int cache_master_sock = client_socket(MASTER_IP, master_port);
+//        std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + status_;
+//        strcpy(send_buff_master, heart_message.data());
+//        std::cout << "Send message:" << send_buff_master << std::endl;
+//        send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
+//        std::cout << "Heartbeat successfully!" << std::endl;
+//        bzero(send_buff_master, BUF_SIZE);
+//        bzero(recv_buff_master, BUF_SIZE);
+//
+//        while (!initial_flag) {
+//            initial(cache_master_sock, recv_buff_master);
+//            if(is_initialed == NO_INIT){
+//                std::cout<<"ERROR: the cache is not initiated. "<<std::endl;
+//                exit(EXIT_FAILURE);
+//            }else if(is_initialed == ERROR_INIT){
+//                std::cout<<"ERROR: something wrong when initiating the cache."<<std::endl;
+//                exit(EXIT_FAILURE);
+//            }
+//            initial_flag = true;
+//        }
+//
+//        bzero(recv_buff_master, BUF_SIZE);
+//        recv(cache_master_sock, recv_buff_master, BUF_SIZE, 0);
+//        ReadFromMaster(recv_buff_master);
+//    });
+//    timer->start();
+//}
+
+
 void Cache::Heartbeat() {
-    static auto timer = std::make_shared<Timer> (500, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
+    static auto timer = std::make_shared<Timer> (1000, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
     timer->setCallback([this](void * pdata){
+//    while (true) {
         bool initial_flag = false;
-        // 向master发送的心跳包
         char send_buff_master[BUF_SIZE], recv_buff_master[BUF_SIZE];
         std::string master_port = std::to_string(MASTER_PORT);
+
         static int cache_master_sock = client_socket(MASTER_IP, master_port);
+
         std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + status_;
         strcpy(send_buff_master, heart_message.data());
         std::cout << "Send message:" << send_buff_master << std::endl;
@@ -102,25 +141,28 @@ void Cache::Heartbeat() {
         bzero(send_buff_master, BUF_SIZE);
         bzero(recv_buff_master, BUF_SIZE);
 
-        while (!initial_flag) {
-            initial(cache_master_sock, recv_buff_master);
-            if(is_initialed == NO_INIT){
-                std::cout<<"ERROR: the cache is not initiated. "<<std::endl;
-                exit(EXIT_FAILURE);
-            }else if(is_initialed == ERROR_INIT){
-                std::cout<<"ERROR: something wrong when initiating the cache."<<std::endl;
-                exit(EXIT_FAILURE);
-            }
-            initial_flag = true;
-        }
+//        // TODO:显示IP和port不一一配对，尚未明确是master发送的数据未配对还是这边解析不对
+//        while (!initial_flag) {
+//            initial(cache_master_sock, recv_buff_master);
+//            if(is_initialed == NO_INIT){
+//                std::cout<<"ERROR: the cache is not initiated. "<<std::endl;
+//                exit(EXIT_FAILURE);
+//            }else if(is_initialed == ERROR_INIT){
+//                std::cout<<"ERROR: something wrong when initiating the cache."<<std::endl;
+//                exit(EXIT_FAILURE);
+//            }
+//            initial_flag = true;
+//        }
 
         bzero(recv_buff_master, BUF_SIZE);
-        recv(cache_master_sock, recv_buff_master, BUF_SIZE, 0);
+        // 设置为非阻塞模式接收信息
+        recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
         ReadFromMaster(recv_buff_master);
     });
     timer->start();
+//        sleep(3);
+//    }
 }
-
 
 void Cache::Client_chat() {
     //线程池
@@ -246,29 +288,45 @@ void Cache::Client_chat() {
 }
 
 
+////向目标IP传递信息
+//void Cache::to_single_cache(std::string &ip, std::string &port, std::string &key){
+//    int cache_cache_sock;
+//    // int
+//    struct sockaddr_in master_addr;
+//    char send_buff_master[BUF_SIZE];
+//    // Master返回的扩缩容信息
+//    // char recv_buff_master[BUF_SIZE];
+//    master_addr.sin_family = PF_INET;
+//    int int_port = stoi(port);
+//    master_addr.sin_port = htons(int_port);
+//    master_addr.sin_addr.s_addr = inet_addr(ip.c_str());
+//
+//    if ((cache_cache_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+//        fprintf(stderr, "Socket Error is %s\n", strerror(errno));
+//        exit(EXIT_FAILURE);
+//    }
+//    // 连接master
+//    if (connect(cache_cache_sock, (struct sockaddr *) (&master_addr), sizeof(struct sockaddr)) == -1) {
+//        fprintf(stderr, "Connect failed\n");
+//        exit(EXIT_FAILURE);
+//    }
+//
+//    bzero(send_buff_master, BUF_SIZE);
+//    std::string val = MainCache.get(key);
+//    std::string message = key + "#" + val;
+//    strcpy(send_buff_master, message.data());
+//    std::cout<<"sending message = "<<send_buff_master<<std::endl;
+//    send(cache_cache_sock, send_buff_master, BUF_SIZE, 0);
+//    std::cout<<"message send."<<std::endl;
+//    bzero(send_buff_master, BUF_SIZE);
+//}
+
 //向目标IP传递信息
 void Cache::to_single_cache(std::string &ip, std::string &port, std::string &key){
-    int cache_cache_sock;
-    // int
-    struct sockaddr_in master_addr;
+    int cache_cache_sock = client_socket(ip, port);
+
     char send_buff_master[BUF_SIZE];
     // Master返回的扩缩容信息
-    // char recv_buff_master[BUF_SIZE];
-    master_addr.sin_family = PF_INET;
-    int int_port = stoi(port);
-    master_addr.sin_port = htons(int_port);
-    master_addr.sin_addr.s_addr = inet_addr(ip.c_str());
-
-    if ((cache_cache_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        fprintf(stderr, "Socket Error is %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-    // 连接master
-    if (connect(cache_cache_sock, (struct sockaddr *) (&master_addr), sizeof(struct sockaddr)) == -1) {
-        fprintf(stderr, "Connect failed\n");
-        exit(EXIT_FAILURE);
-    }
-
     bzero(send_buff_master, BUF_SIZE);
     std::string val = MainCache.get(key);
     std::string message = key + "#" + val;
@@ -278,6 +336,7 @@ void Cache::to_single_cache(std::string &ip, std::string &port, std::string &key
     std::cout<<"message send."<<std::endl;
     bzero(send_buff_master, BUF_SIZE);
 }
+
 
 void slice(std::string message, std::string &key, std::string &val){
     int spear = 0;
@@ -321,8 +380,8 @@ void Cache::from_single_cache(std::string &ip, std::string &port){
     slice(recv_buff_master, key ,val);
     MainCache.put(key, val);
     std::cout<<"receved."<<std::endl;
-
 }
+
 
 void Cache::ReadFromMaster(std::string message) {
     int spear = 2;
@@ -366,6 +425,7 @@ void Cache::cache_pass(){
     // // }
     std::lock_guard<std::mutex> lock_gurad(status_mutex);
     if(status_ == "K"){
+        // TODO：otherIP是啥含义，要缩容的所有IP？
         if(otherIP.size() == 0){
             std::cout<<"IP address is not sent by the master."<<std::endl;
             return;
@@ -547,7 +607,7 @@ void Cache::cal_hash_key() {
     out_key = all_keys;
 }
 
-/*在调用server_socket函数前写入以下内容即可：
+/*在调用server_socket函数后写入以下内容即可：
    int clnt_sock;
    struct sockaddr_in clnt_adr;
    socklen_t clnt_adr_sz;
