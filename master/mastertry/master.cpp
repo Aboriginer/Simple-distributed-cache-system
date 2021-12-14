@@ -311,6 +311,7 @@ void Master::start_cache() {
     }
 }
 
+
 void Master::Start() {
     cacheAddrHash.initialize(0,100);
     auto f_client = std::bind(&Master::start_client, this);

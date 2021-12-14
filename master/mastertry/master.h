@@ -35,7 +35,6 @@
 // #define CACHE_PORT 
 #define CACHE_PORT 8889
 
-
 const int MAX_EVENT_NUMBER = 10000; //最大事件数
 const int EPOLL_SIZE = 20;  // epoll支持的最大句柄数
 const int MAX_THREADS_NUMBER = 10; // 最大线程数量
