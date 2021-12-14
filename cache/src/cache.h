@@ -24,6 +24,7 @@
 #include "LRU_cache.hpp"
 #include "threadPool.hpp"
 #include "Timer.hpp"
+#include "ConsistentHash.hpp"
 // 缓冲区大小65535
 #define BUF_SIZE 0xFFFF
 
@@ -37,6 +38,9 @@
 
 #define KEY_LENGTH 3
 #define VALUE_LENGTH 10
+#define NO_INIT 0
+#define SUCCESS_INIT 1
+#define ERROR_INIT 2
 
 const int MAX_EVENT_NUMBER = 10000; //最大事件数
 
@@ -45,6 +49,8 @@ const int EPOLL_SIZE = 10;  // epoll支持的最大句柄数
 const int MAX_THREADS_NUMBER = 10; // 最大线程数量
 
 const int LRU_CAPACITY = 10;
+
+
 
 class Cache {
 
@@ -55,9 +61,13 @@ public:
     void Start();
 
 private:
+    ConsistentHash hash_maker;
+    std::atomic<int> is_initialed;
     LRU_Cache<std::string, std::string> MainCache;
     int cache_size_local_;
-    std::mutex mutex;
+    std::mutex status_mutex;
+    //用于管理缓冲区的锁
+    std::mutex kv_mutex;
     std::string replica_IP_, port_for_replica;  // TODO：这两行好像不需要了？在69行写了target_IP_, target_port_
     std::string primary_IP_, port_for_primary;
     //向备份发送的信息
@@ -72,6 +82,8 @@ private:
     std::vector<std::string> otherIP, otherPort, out_key;
     //其他cache的地址和port,左值为IP，右值为port
     std::unordered_map<std::string ,std::string> other_Cache;
+    // 从master接受初始化信息
+    void initial();
     // 向master发送心跳包
     void Heartbeat();
     // 接收master信息
@@ -90,6 +102,8 @@ private:
     void ReadFromMaster(std::string message);
     // IP port信息
     void update_cache(std::string &IP, std::string &port,std::string status);
+    //利用一致性哈希算法计算目标ip及其对应的key值
+    void cal_hash_key();
     // IP port信息
     std::string status_, local_cache_IP_, port_for_client_, port_for_cache_;
 };

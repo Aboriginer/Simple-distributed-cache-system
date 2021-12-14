@@ -38,6 +38,22 @@ public:
     bool check(T1 key);     //查找值是否存在
     T1 put(T1 key,T2 val);//变更数据值，或者插入关键字-值对。
     void del(T1 key);
+    std::vector<pair<T1, T2>> all(){
+        std::vector<pair<T1, T2>> res;
+        for(auto it : map){
+            DNode<T1, T2> node = it.second;
+            res.push_back({it.first, node->val});
+        }
+        return res;
+    }
+
+    std::vector<T1> all_key(){
+        vector<T1> res;
+        for(auto it : map){
+            res.push_back(it.first);
+        }
+        return res;
+    }
 //    vector<vector<T>> show_all();
 private:
     void add2head(DNode<T1, T2> *node);
@@ -90,14 +106,6 @@ const T2 LRU_Cache<T1,T2>::get(T1 key){
         return temp ;
     }
 }
-
-//template<typename T1, typename T2>
-//std::vector<std::vector<>> show_all() {
-//    std::vector<std::vector<T>> res;
-//    for(auto it : map){
-//        res.push_back({it.first(), it.second()});
-//    }
-//}
 
 
 //^ 主要功能：变更或插入关键字
