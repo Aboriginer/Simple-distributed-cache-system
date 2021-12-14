@@ -83,11 +83,9 @@ private:
     //其他cache的地址和port,左值为IP，右值为port
     std::unordered_map<std::string ,std::string> other_Cache;
     // 从master接受初始化信息
-    void initial();
+    void initial(int cache_master_sock, char recv_buff_initial[BUF_SIZE]);
     // 向master发送心跳包
     void Heartbeat();
-    // 接收master信息
-    void Master_chat();
     // 与client通信
     void Client_chat();
     // 容灾通信
@@ -104,6 +102,8 @@ private:
     void update_cache(std::string &IP, std::string &port,std::string status);
     //利用一致性哈希算法计算目标ip及其对应的key值
     void cal_hash_key();
+    // 只有P/R两种状态，用于表示cache的身份
+    std::string pr_status_;
     // IP port信息
     std::string status_, local_cache_IP_, port_for_client_, port_for_cache_;
 };
