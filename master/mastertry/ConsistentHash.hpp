@@ -19,8 +19,8 @@ public:
 
     void deleteNode(const int index);
     void addNode(const int index);
-private:
     map<uint32_t, size_t> key2Index;
+private:
     int nodes;
     int v_nodes;
 };
