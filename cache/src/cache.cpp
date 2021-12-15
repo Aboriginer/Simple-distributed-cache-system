@@ -29,16 +29,16 @@ Cache::Cache(int cache_size_local, std::string status, std::string local_cache_I
 void Cache::Start() {
     auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
     auto Client_chat_bind = std::bind(&Cache::Client_chat, this);
-   auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
-   auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
+//    auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
+//    auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
 
     std::thread for_master_Heartbeat(Heartbeat_bind);
     std::thread for_client(Client_chat_bind);
-   std::thread for_cache(Cache_pass_bind);
-   std::thread for_replica(Cache_replica_bind);
+//    std::thread for_cache(Cache_pass_bind);
+//    std::thread for_replica(Cache_replica_bind);
 
-   for_replica.join();
-   for_cache.join();
+//    for_replica.join();
+//    for_cache.join();
     for_client.join();
     for_master_Heartbeat.join();
 }
@@ -47,6 +47,7 @@ void Cache::Start() {
 void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
     //cache将一直监听，直到master向cache传递初始化数据位置。
 
+    std::cout << "=========receive message:" << recv_buff_initial << std::endl;
     auto is_not_init = [](char* message)->bool{
         if(strlen(message)) return false;
         else if(!(message[0] >= '0' && message[0] <= '0')){
@@ -55,6 +56,9 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
             return true;
         }
     };
+
+    std::cout << "below=========receive message:" << recv_buff_initial << std::endl;
+
     while(is_not_init(recv_buff_initial)){
         bzero(recv_buff_initial, BUF_SIZE);
         recv(cache_master_sock, recv_buff_initial, BUF_SIZE, 0);
@@ -115,36 +119,34 @@ void Cache::Heartbeat() {
 
         static int cache_master_sock = client_socket(MASTER_IP, master_port);
 
-//        while (true) {
-            std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + pr_status_;
-//            std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + port_for_cache_ + "#" + pr_status_;
-            strcpy(send_buff_master, heart_message.data());
-            std::cout << "Send message:" << send_buff_master << std::endl;
-            send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
-            std::cout << "Heartbeat successfully!" << std::endl;
-            bzero(send_buff_master, BUF_SIZE);
-            bzero(recv_buff_master, BUF_SIZE);
-
-//        // TODO:显示IP和port不一一配对，原因是master先发送的是扩容信息N，应该是向新增cache先发送cache list
-//        while (!initial_flag) {
-//            initial(cache_master_sock, recv_buff_master);
-//            if(is_initialed == NO_INIT){
-//                std::cout<<"ERROR: the cache is not initiated. "<<std::endl;
-//                exit(EXIT_FAILURE);
-//            }else if(is_initialed == ERROR_INIT){
-//                std::cout<<"ERROR: something wrong when initiating the cache."<<std::endl;
-//                exit(EXIT_FAILURE);
-//            }
-//            initial_flag = true;
-//        }
-//
+        // std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + pr_status_;
+        std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + port_for_cache_ + "#" + pr_status_;
+        strcpy(send_buff_master, heart_message.data());
+        std::cout << "Send message:" << send_buff_master << std::endl;
+        send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
+        std::cout << "Heartbeat successfully!" << std::endl;
+        bzero(send_buff_master, BUF_SIZE);
         bzero(recv_buff_master, BUF_SIZE);
-        // 设置为非阻塞模式接收信息
-        int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
-        if (len != 0)   ReadFromMaster(recv_buff_master);
 
-//        sleep(3);
-//        }
+
+        bzero(recv_buff_master, BUF_SIZE);
+        // 设置为非阻塞模式接收信息，但是这样收不到消息
+        // int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
+        // 设置为阻塞模式可以接收消息，但是master不发送扩缩容信息时心跳会被阻塞
+        int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, 0);
+        std::cout << "================len:" << len << std::endl;
+        if (len != 0 && initial_flag)   ReadFromMaster(recv_buff_master);
+        while (!initial_flag) {
+            initial(cache_master_sock, recv_buff_master);
+            if(is_initialed == NO_INIT){
+                std::cout<<"ERROR: the cache is not initiated. "<<std::endl;
+                exit(EXIT_FAILURE);
+            }else if(is_initialed == ERROR_INIT){
+                std::cout<<"ERROR: something wrong when initiating the cache."<<std::endl;
+                exit(EXIT_FAILURE);
+            }
+            initial_flag = true;
+        }
     });
     timer->start();
 }
@@ -606,7 +608,7 @@ void Cache::cal_hash_key() {
         std::string single = it.first + it.second;
         caches.push_back(single);
     }
-    un
+
     cache_hash.initialize(caches.size(), 100);
     std::vector<std::string> all_keys = MainCache.all_key();
 
