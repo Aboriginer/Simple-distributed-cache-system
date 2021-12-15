@@ -49,7 +49,6 @@ void Cache::Start() {
 void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
     //cache将一直监听，直到master向cache传递初始化数据位置。
 
-    std::cout << "=========receive message:" << recv_buff_initial << std::endl;
     auto is_not_init = [](char* message)->bool{
         if(strlen(message)) return false;
         else if(!(message[0] >= '0' && message[0] <= '0')){
@@ -58,8 +57,6 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
             return true;
         }
     };
-
-    std::cout << "below=========receive message:" << recv_buff_initial << std::endl;
 
     while(is_not_init(recv_buff_initial)){
         bzero(recv_buff_initial, BUF_SIZE);
@@ -131,6 +128,7 @@ void Cache::Heartbeat() {
         bzero(recv_buff_master, BUF_SIZE);
         // 设置为非阻塞模式接收信息
         int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
+        // TODO:测试用，待删除
         std::cout << "================len:" << len << std::endl;
         std::cout << "recv:" << recv_buff_master << std::endl;
         std::cout << "=====================i:" << i << std::endl;
@@ -329,7 +327,7 @@ void Cache::from_single_cache(std::string &ip, std::string &port){
 
 void Cache::ReadFromMaster(std::string message) {
     int spear = 2;
-    while (spear != message.size() && message[spear] != '#') {
+    while (message.size() && spear != message.size() && message[spear] != '#') {
         spear++;
     }
 
@@ -354,23 +352,24 @@ void Cache::ReadFromMaster(std::string message) {
         // TODO:感觉初始化后的N，还是需要unique
         update_cache(neo_cache_IP, neo_cache_Port, "N");
     }else if(head =="P"){
-        // TODO:调试心跳暂时注释
         status_ = head;
         pr_status_ = "P";   // 用于备份转正
         if(message.substr(2, message.size() - 2) == "None"){
             target_IP_ = "None";
             target_port_ = "None";
+        }else {
+            target_IP_  = part(message, spear, 1);
+            target_port_ = part(message, spear, 2);
         }
-        target_IP_  = part(message, spear, 1);
-        target_port_ = part(message, spear, 2);
     }else if(head == "R"){
         status_ = head;
         if(message.substr(2, message.size() - 2) == "None"){
             target_IP_ = "None";
             target_port_ = "None";
+        }else {
+            target_IP_  = part(message, spear, 1);
+            target_port_ = part(message, spear, 2);
         }
-        target_IP_  = part(message, spear, 1);
-        target_port_ = part(message, spear, 2);
     }else if(head == "C"){
         std::string origin_ = part(message, spear, 1);
         std::string backup_ = part(message, spear, 2);
