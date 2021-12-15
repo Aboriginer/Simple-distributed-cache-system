@@ -17,4 +17,10 @@
 ## 缩容
     广播发送："K#killed_ip#killed_cache_port"
 
+容灾：
+主cache掉线，
+1 主cache有备份cache
+master通知备份cache变为主cache，并同步所有cache的ipport，通信格式：B#ip1#port1#ip2#port2#...
+master通知所有cache，将原本存主cache的ip_port的数据更新为备份cache的ip_port,通信格式：C#origin_ip#origin_port#backup_ip#backup_port
+2 主cache没有备份cache：master通知所有cache，将原本存ip_port的数据里,cache_1的数据删除，通信格式：D#delete_ip#delete_port
 
