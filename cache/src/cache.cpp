@@ -83,7 +83,7 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
     for(int i = 0; i < ip.size(); i++){
         std::cout<<ip[i]<<" "<<port[i]<<std::endl;
         pair <std::string , std::string> pair (ip[i], port[i]);
-        cache_list.insert(pair);
+        cache_list.emplace_back(pair);
     }
     std::cout<<"write successful."<<std::endl;
     is_initialed = SUCCESS_INIT;
@@ -168,7 +168,7 @@ void Cache::Client_chat() {
             std::string res;
             if (MainCache.check(key) > 0) {
                 res = MainCache.get(key);
-                buffer = "SUCCESS#" + key + "#" + "#" + local_cache_IP_ + ":" + port_for_client_ + "#" + res;
+                buffer = "SUCCESS#" + key + "#" + local_cache_IP_ + ":" + port_for_client_ + "#" + res;
 
             } else {
                 buffer = "FAILED#" + key + "#" + local_cache_IP_ + ":" + port_for_client_;
@@ -260,39 +260,6 @@ void Cache::Client_chat() {
 }
 
 
-////向目标IP传递信息
-//void Cache::to_single_cache(std::string &ip, std::string &port, std::string &key){
-//    int cache_cache_sock;
-//    // int
-//    struct sockaddr_in master_addr;
-//    char send_buff_master[BUF_SIZE];
-//    // Master返回的扩缩容信息
-//    // char recv_buff_master[BUF_SIZE];
-//    master_addr.sin_family = PF_INET;
-//    int int_port = stoi(port);
-//    master_addr.sin_port = htons(int_port);
-//    master_addr.sin_addr.s_addr = inet_addr(ip.c_str());
-//
-//    if ((cache_cache_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-//        fprintf(stderr, "Socket Error is %s\n", strerror(errno));
-//        exit(EXIT_FAILURE);
-//    }
-//    // 连接master
-//    if (connect(cache_cache_sock, (struct sockaddr *) (&master_addr), sizeof(struct sockaddr)) == -1) {
-//        fprintf(stderr, "Connect failed\n");
-//        exit(EXIT_FAILURE);
-//    }
-//
-//    bzero(send_buff_master, BUF_SIZE);
-//    std::string val = MainCache.get(key);
-//    std::string message = key + "#" + val;
-//    strcpy(send_buff_master, message.data());
-//    std::cout<<"sending message = "<<send_buff_master<<std::endl;
-//    send(cache_cache_sock, send_buff_master, BUF_SIZE, 0);
-//    std::cout<<"message send."<<std::endl;
-//    bzero(send_buff_master, BUF_SIZE);
-//}
-
 //向目标IP传递信息
 void Cache::to_single_cache(std::string &ip, std::string &port, std::string &key){
     int cache_cache_sock = client_socket(ip, port);
@@ -365,7 +332,7 @@ void Cache::ReadFromMaster(std::string message) {
         update_cache(neo_cache_IP, neo_cache_Port, "N");
     }else if(head =="P"){
         status_ = head;
-        // TODO:这里直接改成targetIP_?
+        pr_status_ = "P";   // 用于备份转正
         target_IP_  = message.substr(2, spear);
         target_port_ = message.substr(spear + 1, message.size());
     }else if(head == "R"){
@@ -401,6 +368,7 @@ void Cache::cache_pass(){
             std::cout<<"cache = "<<otherIP[i]<<":"<<otherPort[i]<<std::endl;
             to_single_cache(otherIP[i], otherPort[i], out_key[i]);
         }
+        sleep(3);   // 等待备份cache退出
         exit(0);
     }else if(status_ == "P"){
         std::cout<<"cache = "<<dying_cache_IP_<<" "<<dying_cache_Port<<std::endl;
@@ -416,7 +384,8 @@ void Cache::cache_pass(){
 //更新其他IP地址
 void Cache::update_cache(std::string &IP, std::string &port,std::string status){
     if(status == "N"){
-        auto pair = {IP, port};
+//        auto pair = {IP, port};
+        pair <std::string , std::string> pair (IP, port);
         cache_list.emplace_back(pair);
     }else if(status == "K"){
         dying_cache_IP_ = IP;
@@ -460,6 +429,13 @@ void Cache::replica_chat() {
                         for(auto it : cache_list){
                             send_message += it.first + "#" +it.second;
                         }
+
+                        // 主cache缩容后，备份cache下线
+                        auto local_pair = {local_cache_IP_, port_for_cache_};
+                        if (find(cache_list.begin(), cache_list.end(), local_pair) == cache_list.end()) {
+                            exit(0);
+                        }
+
                         std::cout << "Send cache_list to replica cache, fd = " << clnt_sock << std::endl;
                         strcpy(send_buff_replica, send_message.data());
                         send(clnt_sock, send_buff_replica, BUF_SIZE, 0);
@@ -470,7 +446,6 @@ void Cache::replica_chat() {
                         std::cout << "Need to write key/key#value" << std::endl;
                         send_message.clear();
                         bzero(send_buff_replica, BUF_SIZE);
-                        // TODO:kv_update_flag这里不用加锁吧？
                         kv_mutex.lock();
                         send_message = kv_to_replica;
                         kv_mutex.unlock();
@@ -522,7 +497,8 @@ void Cache::replica_chat() {
                         std::cout<<"wrong message."<<std::endl;
                     }else{
                         for(int i = 0; i < ip.size(); i++){
-                            auto pair = {ip[i], port[i]};
+//                            auto pair = {ip[i], port[i]};
+                            pair <std::string , std::string> pair (ip[i], port[i]);
                             cache_list.emplace_back(pair);
                         }
                     }
