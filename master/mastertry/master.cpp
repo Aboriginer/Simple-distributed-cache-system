@@ -555,23 +555,29 @@ void Master::periodicDetectCache(){
                             }
                             ++index;
                         }
-                        // master通知备份cache_2现在是主cache,并同步所有的ipport
-                        // cache_2 的fd：clients_list[clients_list[fd]->pair_fd]->pair_fd
-                        //------------------------------------------------------
-                        // B#ip1#port1#ip2#port2#...
-                        //------------------------------------------------------
-                        string toBackupBacheMsg = "B";
-                        for(auto fdi : fd_node){
-                            toBackupBacheMsg = toBackupBacheMsg + "#" + clients_list[fdi]->ip_cache;
-                        }
-                        // cout<<"send msg \'"<< toBackupBacheMsg <<"\' to cache" <<cacheServerAddr <<endl;
-                        strcpy(send_buff_disaster, toBackupBacheMsg.c_str());
-                        send(clients_list[clients_list[fd]->pair_fd]->pair_fd, send_buff_disaster, BUF_SIZE, 0);
+                        // =======================================================================================================
+                        // // master通知备份cache_2现在是主cache,并同步所有的ipport
+                        // // cache_2 的fd：clients_list[clients_list[fd]->pair_fd]->pair_fd
+                        // //------------------------------------------------------
+                        // // B#ip1#port1#ip2#port2#...
+                        // //------------------------------------------------------
+                        // string toBackupBacheMsg = "B";
+                        // for(auto fdi : fd_node){
+                        //     toBackupBacheMsg = toBackupBacheMsg + "#" + clients_list[fdi]->ip_cache;
+                        // }
+                        // // cout<<"send msg \'"<< toBackupBacheMsg <<"\' to cache" <<cacheServerAddr <<endl;
+                        // strcpy(send_buff_disaster, toBackupBacheMsg.c_str());
+                        // send(clients_list[clients_list[fd]->pair_fd]->pair_fd, send_buff_disaster, BUF_SIZE, 0);
+                        // =======================================================================================================
                         // master通知所有cache，将原本存ip_port的数据里，cache_1的位置更新为cache_2的位置
                         //------------------------------------------------------
                         // C#origin_ip#origin_port#backup_ip#backup_port
                         //------------------------------------------------------
-                        string toAllCacheMsg = "C#"+clients_list[fd]->ip_cache+clients_list[clients_list[fd]->pair_fd]->ip_cache;
+                        //C#origin_ip:origin_port#backup_ip:backup_cache
+                        string str1 = clients_list[fd]->ip_cache.replace(clients_list[fd]->ip_cache.find("#"), 1, ":");
+                        string str2 = clients_list[clients_list[fd]->pair_fd]->ip_cache.replace(clients_list[clients_list[fd]->pair_fd]->ip_cache.find("#"), 1, ":");
+                        // string toAllCacheMsg = "C#"+clients_list[fd]->ip_cache+clients_list[clients_list[fd]->pair_fd]->ip_cache;
+                        string toAllCacheMsg = "C#" + str1 + "#" + str2;
                         // 然后把这个msg发给所有的cache====广播
                         cout<<"send msg \'"<< toAllCacheMsg <<"\' to all cache"<<endl; 
                         for(auto fdi : fd_node){//将新加入的cache的ip和port发给所有的cache
