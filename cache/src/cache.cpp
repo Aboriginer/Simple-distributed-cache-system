@@ -357,10 +357,18 @@ void Cache::ReadFromMaster(std::string message) {
         // TODO:调试心跳暂时注释
         status_ = head;
         pr_status_ = "P";   // 用于备份转正
+        if(message.substr(2, message.size() - 2) == "None"){
+            target_IP_ = "None";
+            target_port_ = "None";
+        }
         target_IP_  = part(message, spear, 1);
         target_port_ = part(message, spear, 2);
     }else if(head == "R"){
         status_ = head;
+        if(message.substr(2, message.size() - 2) == "None"){
+            target_IP_ = "None";
+            target_port_ = "None";
+        }
         target_IP_  = part(message, spear, 1);
         target_port_ = part(message, spear, 2);
     }else if(head == "C"){
@@ -724,4 +732,3 @@ void addfd(int epollfd, int fd, bool enable_et) {
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFD, 0) | O_NONBLOCK);
     printf("fd added to epoll!\n\n");
 }
-
