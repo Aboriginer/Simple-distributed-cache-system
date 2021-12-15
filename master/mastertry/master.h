@@ -50,12 +50,14 @@ public:
     unordered_map<string, time_t> cacheAddrMap;
     // 接入的cache列表：fd-cache详细信息
     std::unordered_map<int, struct fdmap *> clients_list;
-    // 接入的cache对应的fd列表：
+    // 接入的主cache对应的fd列表：
     std::vector<int> fd_node;
-    // 主cache？这的备注没有粘过来 T T
-    stack<int> pcache;
-    // 备份cache？
-    stack<int> rcache;
+
+    // 未配对主cache堆栈
+    std::stack<int> pcache;
+    // 未配对备份cache堆栈
+    std::stack<int> rcache;
+
     int epoll_events_count;
     // 参构造函数
     Master();
@@ -143,8 +145,9 @@ struct fdmap {
     char status;            //  'P'/'R'
     int fd;
     int pair_fd;            //  pair fd
-    std::string ip_port;    //  IP#PORT
-    fdmap(int fd) :status('n'), fd(fd), pair_fd(-1), ip_port("0"){} //无参数的构造函数数组初始化时调用
+    std::string ip_port;    //  IP#PORT_for_client
+    std::string ip_cache;    //  IP#PORT_for_cache
+    fdmap(int fd) :status('n'), fd(fd), pair_fd(-1), ip_port("0"), ip_cache("0"){} //无参数的构造函数数组初始化时调用
 };
 
 #endif
