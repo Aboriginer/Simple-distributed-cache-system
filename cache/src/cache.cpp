@@ -24,6 +24,8 @@ Cache::Cache(int cache_size_local, std::string status, std::string local_cache_I
     cache_list_update_flag = false;
     kv_update_flag = false;
     is_initialed = 0;
+    initial_flag = false;
+    if (pr_status_ == "R") initial_flag = true;
 }
 
 void Cache::Start() {
@@ -112,8 +114,7 @@ void Cache::Heartbeat() {
     timer->setCallback([this](void * pdata){
 
 
-
-        bool initial_flag = false;
+        // bool initial_flag = false;
         char send_buff_master[BUF_SIZE], recv_buff_master[BUF_SIZE];
         std::string master_port = std::to_string(MASTER_PORT);
 
@@ -130,13 +131,12 @@ void Cache::Heartbeat() {
 
 
         bzero(recv_buff_master, BUF_SIZE);
-        // 设置为非阻塞模式接收信息，但是这样收不到消息
-        // int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
-        // 设置为阻塞模式可以接收消息，但是master不发送扩缩容信息时心跳会被阻塞
-        int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, 0);
+        // 设置为非阻塞模式接收信息
+        int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
         std::cout << "================len:" << len << std::endl;
+        std::cout << "recv:" << recv_buff_master << std::endl;
         if (len != 0 && initial_flag)   ReadFromMaster(recv_buff_master);
-        while (!initial_flag) {
+        while (!initial_flag && len > 0) {
             initial(cache_master_sock, recv_buff_master);
             if(is_initialed == NO_INIT){
                 std::cout<<"ERROR: the cache is not initiated. "<<std::endl;
