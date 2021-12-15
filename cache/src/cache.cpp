@@ -34,7 +34,7 @@ void Cache::Start() {
 
 //    for_replica.join();
 //    for_cache.join();
-//    for_client.join();
+    for_client.join();
     for_master_Heartbeat.join();
 }
 
