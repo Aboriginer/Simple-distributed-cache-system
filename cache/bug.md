@@ -46,3 +46,14 @@ initial代码暂时先注释
 3.扩缩容cache_pass通信写的不对
 
 4.容灾replica_chat的cache_list没输入
+
+
+
+
+
+1.用time不行，while可以
+好像只改了master的continue就行?
+
+2.init的信息发送顺序
+
+3.port_for_cache_好像没传给master
