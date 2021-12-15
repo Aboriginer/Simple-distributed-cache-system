@@ -22,20 +22,20 @@ Cache::Cache(int cache_size_local, std::string status, std::string local_cache_I
 }
 
 void Cache::Start() {
-    auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
-    auto Client_chat_bind = std::bind(&Cache::Client_chat, this);
-//    auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
+    // auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
+    // auto Client_chat_bind = std::bind(&Cache::Client_chat, this);
+   auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
 //    auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
 
-    std::thread for_master_Heartbeat(Heartbeat_bind);
-    std::thread for_client(Client_chat_bind);
-//    std::thread for_cache(Cache_pass_bind);
+    // std::thread for_master_Heartbeat(Heartbeat_bind);
+    // std::thread for_client(Client_chat_bind);
+   std::thread for_cache(Cache_pass_bind);
 //    std::thread for_replica(Cache_replica_bind);
 
 //    for_replica.join();
-//    for_cache.join();
-    for_client.join();
-    for_master_Heartbeat.join();
+   for_cache.join();
+    // for_client.join();
+    // for_master_Heartbeat.join();
 }
 
 //从master接受初始化信息
@@ -376,16 +376,16 @@ void Cache::ReadFromMaster(std::string message) {
 
 //扩缩容函数
 void Cache::cache_pass(){
-    dying_cache_IP_ = "127.0.0.1";
-    dying_cache_Port = "8889";
+    // dying_cache_IP_ = "127.0.0.1";
+    // dying_cache_Port = "8889";
     std::cout<<"u r going to ..."<<std::endl;
     std::cin>> status_;
     std::cout<<(status_ == "K" ? "die" : "primary")<<std::endl;
     if(status_ == "K"){
         // TODO：otherIP是啥含义，要缩容的所有IP？
-        otherIP.push_back("127.0.0.1");
-        otherPort.push_back("8888");
-        std::cout<<"set"<<std::endl;
+        // otherIP.push_back("127.0.0.1");
+        // otherPort.push_back("8888");
+        // std::cout<<"set"<<std::endl;
         if(otherIP.size() == 0){
             std::cout<<"IP address is not sent by the master."<<std::endl;
             return;
@@ -403,12 +403,12 @@ void Cache::cache_pass(){
         
     }else if(status_ == "P"){
         std::cout<<"cache = "<<dying_cache_IP_<<" "<<dying_cache_Port<<std::endl;
-        from_single_cache(dying_cache_IP_, dying_cache_Port);
+        from_single_cache(local_cache_IP_, port_for_cache_);
         cache_list_update_flag = true;
         std::cout<<"cache_list_update_flag == "<< (cache_list_update_flag ? "true" : "false") <<std::endl;
         sleep(4);
     }else if(status_ == "R"){
-        from_single_cache(dying_cache_IP_, dying_cache_Port);
+        from_single_cache(local_cache_IP_, port_for_cache_);
     }
 }
 
