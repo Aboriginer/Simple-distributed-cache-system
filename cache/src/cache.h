@@ -20,6 +20,7 @@
 // #include <atomic>
 #include <functional>
 #include <mutex>
+#include <algorithm>
 //LRU链表
 #include "LRU_cache.hpp"
 #include "threadPool.hpp"
@@ -56,7 +57,6 @@ class Cache {
 
 public:
     Cache(int cache_size_local, std::string status_, std::string local_cache_IP, std::string port_for_client, std::string port_for_cache);
-
     // 启动Cache
     void Start();
 
@@ -74,14 +74,15 @@ private:
     std::string kv_to_replica; // 用于存储向replica cache传递的key key#value
     bool kv_update_flag;    // true: key key#value有更新
     // cache_list用于存储所有cache的IP和port，包括本地cache的IP和port，TODO:我觉得扩缩容用的other_Cache可以直接用cache_list代替
-    std::unordered_map<std::string ,std::string> cache_list;
+    // std::unordered_map<std::string ,std::string> cache_list;
+    std::vector<pair<std::string , std::string>> cache_list;
     bool cache_list_update_flag;    // true：cache_list有更新，整个cache_list发送给replica cache(以下四种情况为true: 1.cache_list初始化2.cache扩容3.cache缩容4.cache宕机)
     std::string target_IP_, target_port_; // primary状态：target_IP_为备份cache IP, replica状态：target_IP_为主cache IP
     // 扩缩容使用
     std::string dying_cache_IP_, dying_cache_Port;
     std::vector<std::string> otherIP, otherPort, out_key;
     //其他cache的地址和port,左值为IP，右值为port
-    std::unordered_map<std::string ,std::string> other_Cache;
+    std::vector<pair<std::string , std::string>> other_Cache;
     // 从master接受初始化信息
     void initial(int cache_master_sock, char recv_buff_initial[BUF_SIZE]);
     // 向master发送心跳包
