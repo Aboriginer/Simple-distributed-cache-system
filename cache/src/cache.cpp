@@ -4,6 +4,7 @@
 
 #include "cache.h"
 
+
 Cache::Cache(int cache_size_local, std::string status, std::string local_cache_IP, std::string port_for_client,
              std::string port_for_cache) {
     cache_size_local_ = cache_size_local;
@@ -167,7 +168,7 @@ void Cache::Client_chat() {
             std::string res;
             if (MainCache.check(key) > 0) {
                 res = MainCache.get(key);
-                buffer = "SUCCESS#" + res + "#" + local_cache_IP_ + ":" + port_for_client_;
+                buffer = "SUCCESS#" + key + "#" + "#" + local_cache_IP_ + ":" + port_for_client_ + "#" + res;
 
             } else {
                 buffer = "FAILED#" + key + "#" + local_cache_IP_ + ":" + port_for_client_;
@@ -400,7 +401,7 @@ void Cache::cache_pass(){
             std::cout<<"cache = "<<otherIP[i]<<":"<<otherPort[i]<<std::endl;
             to_single_cache(otherIP[i], otherPort[i], out_key[i]);
         }
-        
+        exit(0);
     }else if(status_ == "P"){
         std::cout<<"cache = "<<dying_cache_IP_<<" "<<dying_cache_Port<<std::endl;
         from_single_cache(local_cache_IP_, port_for_cache_);
@@ -415,12 +416,16 @@ void Cache::cache_pass(){
 //更新其他IP地址
 void Cache::update_cache(std::string &IP, std::string &port,std::string status){
     if(status == "N"){
-        cache_list[IP] = port;
+        auto pair = {IP, port};
+        cache_list.emplace_back(pair);
     }else if(status == "K"){
         dying_cache_IP_ = IP;
         dying_cache_Port = port;
-        cache_list.erase(IP);
+        auto pair = {IP, port};
+        auto it  = find(cache_list.begin(), cache_list.end(), pair);
+        cache_list.erase(it);
     }
+    cache_list_update_flag = true;
 }
 
 
@@ -517,7 +522,8 @@ void Cache::replica_chat() {
                         std::cout<<"wrong message."<<std::endl;
                     }else{
                         for(int i = 0; i < ip.size(); i++){
-                            cache_list.insert({ip[i], port[i]});
+                            auto pair = {ip[i], port[i]};
+                            cache_list.emplace_back(pair);
                         }
                     }
                 }
