@@ -46,7 +46,16 @@ void Cache::Start() {
 //从master接受初始化信息
 void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
     //cache将一直监听，直到master向cache传递初始化数据位置。
-    while(strlen(recv_buff_initial) == 0){
+
+    auto is_not_init = [](char* message)->bool{
+        if(strlen(message)) return false;
+        else if(!(message[0] >= '0' && message[0] <= '0')){
+            return false;
+        }else{
+            return true;
+        }
+    };
+    while(is_not_init(recv_buff_initial)){
         bzero(recv_buff_initial, BUF_SIZE);
         recv(cache_master_sock, recv_buff_initial, BUF_SIZE, 0);
     }
@@ -320,29 +329,70 @@ void Cache::ReadFromMaster(std::string message) {
     while (spear != message.size() && message[spear] != '#') {
         spear++;
     }
+
+    auto part = [](std::string str,int spear, int part_num)->std::string{
+        if(part_num == 1) return str.substr(2, spear - 2);
+        else if(part_num == 2)return str.substr(spear + 1, str.size() - spear -1);
+    };
     std::string head = message.substr(0,1);   //P或者R
     std::lock_guard<std::mutex> guard(status_mutex);
     if(head == "K"){
-        dying_cache_IP_ = message.substr(2,spear);
-        dying_cache_Port = message.substr(spear + 1, message.size());
+        dying_cache_IP_ = part(message, spear, 1);
+        dying_cache_Port = part(message, spear, 2);
         
         if(dying_cache_IP_ == local_cache_IP_ && dying_cache_Port == port_for_cache_){
             status_ = "K";
         }
         update_cache(dying_cache_IP_, dying_cache_Port, "K"); // 更新cache_list
     }else if(head == "N"){
-        std::string neo_cache_IP = message.substr(2,spear);
-        std::string neo_cache_Port = message.substr(spear + 1, message.size());
+        std::string neo_cache_IP = part(message, spear, 1);
+        std::string neo_cache_Port = part(message, spear, 2);
         update_cache(neo_cache_IP, neo_cache_Port, "N");
     }else if(head =="P"){
         status_ = head;
         pr_status_ = "P";   // 用于备份转正
-        target_IP_  = message.substr(2, spear);
-        target_port_ = message.substr(spear + 1, message.size());
+        target_IP_  = part(message, spear, 1);
+        target_port_ = part(message, spear, 2);
     }else if(head == "R"){
         status_ = head;
-        target_IP_  = message.substr(2, spear);
-        target_port_ = message.substr(spear + 1, message.size());
+        target_IP_  = part(message, spear, 1);
+        target_port_ = part(message, spear, 2);
+    }else if(head == "C"){
+        std::string origin_ = part(message, spear, 1);
+        std::string backup_ = part(message, spear, 2);
+        // int spear1 = 0, spear2 = 0;
+        auto slice = [](std::string origin_)->int{
+            int spear1 = 0;
+            while(spear1 != origin_.size() && origin_[spear1] != ':'){
+                spear1++;
+            }
+        };
+        int ptr1 = slice(origin_);
+        int ptr2 = slice(backup_);
+        std::string origin_ip = part(origin_, ptr1, 1);
+        std::string origin_port = part(origin_, ptr1, 2);
+        std::string backup_ip = backup_.substr(0, ptr2);
+        std::string backup_port = backup_.substr(ptr2 + 1, backup_.size() - ptr2 -1);
+        //现在对表进行替换。
+        std::pair<std::string , std::string> origin = {origin_ip, origin_port};
+        std::pair<std::string , std::string> backup = {backup_ip, backup_port};
+        auto replace = [&origin, &backup](std::pair<std::string, std::string> a){
+            if(a.first == origin.first && a.second == origin.second){
+                a.first = backup.first;
+                a.second = backup.second;
+            }
+            return a.first == origin.first && a.second == origin.second;
+        };
+        auto it  = find_if(cache_list.begin(), cache_list.end(), replace);
+    }else if(head == "D"){
+        std::string dead_ip = part(message, spear, 1);
+        std::string dead_port = part(message, spear, 2);
+        std::pair<std::string , std::string> dead_ = {dead_ip, dead_port};
+        auto equal = [&dead_](std::pair<std::string, std::string> &a){
+            return a.first == dead_.first &&a.second == dead_.second;
+        };
+        auto it  = find_if(cache_list.begin(), cache_list.end(), equal);
+        cache_list.erase(it);
     }
 }
 
@@ -556,6 +606,7 @@ void Cache::cal_hash_key() {
         std::string single = it.first + it.second;
         caches.push_back(single);
     }
+    un
     cache_hash.initialize(caches.size(), 100);
     std::vector<std::string> all_keys = MainCache.all_key();
 
