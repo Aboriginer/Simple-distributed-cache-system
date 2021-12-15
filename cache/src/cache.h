@@ -68,12 +68,10 @@ private:
     std::mutex status_mutex;
     //用于管理缓冲区的锁
     std::mutex kv_mutex;
-    std::string replica_IP_, port_for_replica;  // TODO：这两行好像不需要了？在69行写了target_IP_, target_port_
-    std::string primary_IP_, port_for_primary;
     //向备份发送的信息
     std::string kv_to_replica; // 用于存储向replica cache传递的key key#value
     bool kv_update_flag;    // true: key key#value有更新
-    // cache_list用于存储所有cache的IP和port，包括本地cache的IP和port，TODO:我觉得扩缩容用的other_Cache可以直接用cache_list代替
+    // cache_list用于存储所有cache的IP和port，包括本地cache的IP和port
     // std::unordered_map<std::string ,std::string> cache_list;
     std::vector<pair<std::string , std::string>> cache_list;
     bool cache_list_update_flag;    // true：cache_list有更新，整个cache_list发送给replica cache(以下四种情况为true: 1.cache_list初始化2.cache扩容3.cache缩容4.cache宕机)
