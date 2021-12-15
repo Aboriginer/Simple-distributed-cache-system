@@ -430,12 +430,6 @@ void Cache::replica_chat() {
                             send_message += it.first + "#" +it.second;
                         }
 
-                        // 主cache缩容后，备份cache下线
-                        auto local_pair = {target_IP_, target_port_};
-                        if (find(cache_list.begin(), cache_list.end(), local_pair) == cache_list.end()) {
-                            exit(0);
-                        }
-
                         std::cout << "Send cache_list to replica cache, fd = " << clnt_sock << std::endl;
                         strcpy(send_buff_replica, send_message.data());
                         send(clnt_sock, send_buff_replica, BUF_SIZE, 0);
@@ -502,6 +496,13 @@ void Cache::replica_chat() {
                             cache_list.emplace_back(pair);
                         }
                     }
+
+                    // 主cache缩容后，备份cache下线
+                    auto local_pair = {target_IP_, target_port_};
+                    if (find(cache_list.begin(), cache_list.end(), local_pair) == cache_list.end()) {
+                        exit(0);
+                    }
+
                 }
                 else{   // 收到更新的key/key#value
                     std::cout << "Receive key/key#value" << std::endl;
