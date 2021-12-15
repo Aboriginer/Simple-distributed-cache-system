@@ -82,7 +82,7 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
     for(int i = 0; i < ip.size(); i++){
         std::cout<<ip[i]<<" "<<port[i]<<std::endl;
         pair <std::string , std::string> pair (ip[i], port[i]);
-        other_Cache.insert(pair);
+        cache_list.insert(pair);
     }
     std::cout<<"write successful."<<std::endl;
     is_initialed = SUCCESS_INIT;
@@ -322,33 +322,22 @@ void slice(std::string message, std::string &key, std::string &val){
 //从目标IP地址接受信息
 //这里似乎没有将备份也考虑进去。
 void Cache::from_single_cache(std::string &ip, std::string &port){
-    int cache_cache_sock;
-    // int
-    struct sockaddr_in master_addr;
     char recv_buff_master[BUF_SIZE];
-    // Master返回的扩缩容信息
-    // char recv_buff_master[BUF_SIZE];
-    master_addr.sin_family = PF_INET;
-    int int_port = stoi(port);
-    master_addr.sin_port = htons(int_port);
-    master_addr.sin_addr.s_addr = inet_addr(ip.c_str());
+    int serv_sock = server_socket(ip, port);
+    int clnt_sock;
+    struct sockaddr_in clnt_adr;
+    socklen_t clnt_adr_sz;
+    clnt_adr_sz = sizeof(clnt_adr);
+    clnt_sock = accept(serv_sock, (struct sockaddr*)&clnt_adr, &clnt_adr_sz);
+    std::cout << "client connection from:" << inet_ntoa(clnt_adr.sin_addr) << ":"
+                << ntohs(clnt_adr.sin_port) << ", client_fd = " << clnt_sock << std::endl;
 
-    if ((cache_cache_sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        fprintf(stderr, "Socket Error is %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-    // 连接master
-    socklen_t size = sizeof(struct sockaddr);
-    if (accept(cache_cache_sock,(struct sockaddr *)(&master_addr), &size) == -1) {
-        fprintf(stderr, "Connect failed\n");
-        exit(EXIT_FAILURE);
-    }
-
-
-    recv(cache_cache_sock, recv_buff_master, BUF_SIZE, 0);
+    recv(serv_sock, recv_buff_master, BUF_SIZE, 0);
     std::cout<<"receving message = "<<recv_buff_master<<std::endl;
     std::string key ,val;
     slice(recv_buff_master, key ,val);
+    std::cout<<"putting key & val :"<<std::endl;
+    std::cout<<key<<" "<<val<<std::endl;
     MainCache.put(key, val);
     std::cout<<"receved."<<std::endl;
 }
@@ -364,6 +353,7 @@ void Cache::ReadFromMaster(std::string message) {
     if(head == "K"){
         dying_cache_IP_ = message.substr(2,spear);
         dying_cache_Port = message.substr(spear + 1, message.size());
+        
         if(dying_cache_IP_ == local_cache_IP_ && dying_cache_Port == port_for_cache_){
             status_ = "K";
         }
@@ -375,44 +365,48 @@ void Cache::ReadFromMaster(std::string message) {
     }else if(head =="P"){
         status_ = head;
         // TODO:这里直接改成targetIP_?
-        replica_IP_ = message.substr(2, spear);
-        port_for_replica = message.substr(spear + 1, message.size());
+        target_IP_  = message.substr(2, spear);
+        target_port_ = message.substr(spear + 1, message.size());
     }else if(head == "R"){
         status_ = head;
-        primary_IP_ = message.substr(2, spear);
-        port_for_primary = message.substr(spear + 1, message.size());
+        target_IP_  = message.substr(2, spear);
+        target_port_ = message.substr(spear + 1, message.size());
     }
 }
 
 //扩缩容函数
 void Cache::cache_pass(){
-    // std::cout <<"select status"<<std::endl;
-    // // std::cin >> status_;
-    // //这些是debug信息
-    // // otherIP.push_back("127.0.0.1");
-    // // if(port_for_cache_ == "8888"){
-    // //     otherPort.push_back("8889");
-    // // }else{
-    // //     otherPort.push_back("8888");
-    // // }
-    std::lock_guard<std::mutex> lock_gurad(status_mutex);
-    // TODO:删除缩容IP的过程和传递key要不要加锁？
+    dying_cache_IP_ = "127.0.0.1";
+    dying_cache_Port = "8889";
+    std::cout<<"u r going to ..."<<std::endl;
+    std::cin>> status_;
+    std::cout<<(status_ == "K" ? "die" : "primary")<<std::endl;
     if(status_ == "K"){
         // TODO：otherIP是啥含义，要缩容的所有IP？
+        otherIP.push_back("127.0.0.1");
+        otherPort.push_back("8888");
+        std::cout<<"set"<<std::endl;
         if(otherIP.size() == 0){
             std::cout<<"IP address is not sent by the master."<<std::endl;
             return;
         }
         int size = otherIP.size();
         //计算目标地址
-        cal_hash_key();
+        // cal_hash_key();
+        out_key.push_back("123");
         //传递数据
         for(int i = 0; i < otherIP.size(); i++){
+            std::cout<<"handling cache = "<<i<<std::endl;
+            std::cout<<"cache = "<<otherIP[i]<<":"<<otherPort[i]<<std::endl;
             to_single_cache(otherIP[i], otherPort[i], out_key[i]);
         }
+        
     }else if(status_ == "P"){
+        std::cout<<"cache = "<<dying_cache_IP_<<" "<<dying_cache_Port<<std::endl;
         from_single_cache(dying_cache_IP_, dying_cache_Port);
         cache_list_update_flag = true;
+        std::cout<<"cache_list_update_flag == "<< (cache_list_update_flag ? "true" : "false") <<std::endl;
+        sleep(4);
     }else if(status_ == "R"){
         from_single_cache(dying_cache_IP_, dying_cache_Port);
     }
@@ -421,11 +415,11 @@ void Cache::cache_pass(){
 //更新其他IP地址
 void Cache::update_cache(std::string &IP, std::string &port,std::string status){
     if(status == "N"){
-        other_Cache[IP] = port;
+        cache_list[IP] = port;
     }else if(status == "K"){
         dying_cache_IP_ = IP;
         dying_cache_Port = port;
-        other_Cache.erase(IP);
+        cache_list.erase(IP);
     }
 }
 
@@ -523,7 +517,7 @@ void Cache::replica_chat() {
                         std::cout<<"wrong message."<<std::endl;
                     }else{
                         for(int i = 0; i < ip.size(); i++){
-                            other_Cache.insert({ip[i], port[i]});
+                            cache_list.insert({ip[i], port[i]});
                         }
                     }
                 }
@@ -557,7 +551,7 @@ void Cache::replica_chat() {
 void Cache::cal_hash_key() {
     std::vector<std::string> caches;
     ConsistentHash cache_hash;
-    for(auto it : other_Cache){
+    for(auto it : cache_list){
         std::string single = it.first + it.second;
         caches.push_back(single);
     }
