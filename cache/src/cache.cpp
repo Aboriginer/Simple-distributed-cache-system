@@ -431,7 +431,7 @@ void Cache::replica_chat() {
                         }
 
                         // 主cache缩容后，备份cache下线
-                        auto local_pair = {local_cache_IP_, port_for_cache_};
+                        auto local_pair = {target_IP_, target_port_};
                         if (find(cache_list.begin(), cache_list.end(), local_pair) == cache_list.end()) {
                             exit(0);
                         }
