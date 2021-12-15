@@ -4,6 +4,10 @@
 
 #include "cache.h"
 
+// bool operator == (const std::pair<std::string, std::string> &a, 
+//                         std::pair<std::string, std::string> &b){
+//                             return a.first == b.first;
+//                         }
 
 Cache::Cache(int cache_size_local, std::string status, std::string local_cache_IP, std::string port_for_client,
              std::string port_for_cache) {
@@ -369,7 +373,10 @@ void Cache::cache_pass(){
             to_single_cache(otherIP[i], otherPort[i], out_key[i]);
         }
         sleep(3);   // 等待备份cache退出
+        //这把锁在to_replica线程里也会被管理，只有那里被解锁之后才能进行exit操作。
+        end_mutex.lock();
         exit(0);
+        end_mutex.unlock();
     }else if(status_ == "P"){
         std::cout<<"cache = "<<dying_cache_IP_<<" "<<dying_cache_Port<<std::endl;
         from_single_cache(local_cache_IP_, port_for_cache_);
@@ -383,6 +390,8 @@ void Cache::cache_pass(){
 
 //更新其他IP地址
 void Cache::update_cache(std::string &IP, std::string &port,std::string status){
+    
+    
     if(status == "N"){
 //        auto pair = {IP, port};
         pair <std::string , std::string> pair (IP, port);
@@ -390,8 +399,11 @@ void Cache::update_cache(std::string &IP, std::string &port,std::string status){
     }else if(status == "K"){
         dying_cache_IP_ = IP;
         dying_cache_Port = port;
-        auto pair = {IP, port};
-        auto it  = find(cache_list.begin(), cache_list.end(), pair);
+        std::pair<std::string, std::string> pair = {IP, port};
+        auto equal = [&pair](std::pair<std::string, std::string> &a){
+            return a.first == pair.first &&a.second == pair.second;
+        };
+        auto it  = find_if(cache_list.begin(), cache_list.end(), equal);
         cache_list.erase(it);
     }
     cache_list_update_flag = true;
@@ -471,6 +483,8 @@ void Cache::replica_chat() {
                 std::cout << "Receive from primary cache:" << recv_message << std::endl;
                 // TODO:解析收到的recv_message，写入备份的LRU中
                 if (recv_message[0] == '#') {   // 收到更新的cache_list
+                    //上锁。防止主cache提前推出。
+                    end_mutex.lock();
                     std::cout << "Receive cache_list" << std::endl;
                     std::vector<std::string> ip, port;
                     std::string tmp;
@@ -496,10 +510,14 @@ void Cache::replica_chat() {
                             cache_list.emplace_back(pair);
                         }
                     }
-
+                    //解锁。
+                    end_mutex.unlock();
                     // 主cache缩容后，备份cache下线
-                    auto local_pair = {target_IP_, target_port_};
-                    if (find(cache_list.begin(), cache_list.end(), local_pair) == cache_list.end()) {
+                    std::pair<std::string, std::string> local_pair = {target_IP_, target_port_};
+                    auto equal = [&local_pair](std::pair<std::string, std::string> &a){
+                        return a.first == local_pair.first &&a.second == local_pair.second;
+                    };
+                    if (find_if(cache_list.begin(), cache_list.end(), equal) == cache_list.end()) {
                         exit(0);
                     }
 
@@ -648,3 +666,4 @@ void addfd(int epollfd, int fd, bool enable_et) {
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFD, 0) | O_NONBLOCK);
     printf("fd added to epoll!\n\n");
 }
+
