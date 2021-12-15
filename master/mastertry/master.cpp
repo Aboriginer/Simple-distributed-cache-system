@@ -211,6 +211,7 @@ void Master::start_cache() {
                         // continue;
                         // 这里还是会接收到关掉的那个cache，我不知道要怎么把他关掉，就直接continue了
                     } */
+                    cout<<"msg:"<<recv_buff_client<<endl;
                     struct fdmap *it = clients_list[client_events[i].data.fd];
                     //————————————————————————————————-————--————————————————————————————————————————————
                     std::cout << "get heartbeat from cache server:" << recv_buff_client << std::endl; 
@@ -504,7 +505,9 @@ bool Master::heartBeatDetect(int fd) {
 //===================================
 // 下面这里我一点都没测，所以如果你要做别的然后这里还有问题，你可以先用上面的，上面的是原来的
 // 没有测是指可能运行有bug
+
 void Master::periodicDetectCache(){
+    char send_buff_disaster[BUF_SIZE];
     while(true){
         //————————————————————————————————-————--
         //cout<< "periodicDetectCache"<<endl;   ｜
@@ -629,73 +632,6 @@ void Master::periodicDetectCache(){
     }
 }
 
-
-void Master::periodicDetectCache(){
-    char send_buff_disaster[BUF_SIZE];
-    while(true){
-        //————————————————————————————————-————--
-        //cout<< "periodicDetectCache"<<endl;   ｜
-        //————————————————————————————————-————--
-        // 周期性更新本地的cache时间戳的表
-        for(auto fd : fd_node){
-            time_t timeNow;
-            time(&timeNow);
-            if(heartBeatDetect(fd)){   //存活
-
-                continue;
-            } 
-            else{     //不存活
-                if (clients_list[fd]->status == 'R') { //掉线的是备份cache
-                    clients_list[clients_list[fd]->pair_fd]->pair_fd = -1;  // 配偶清空
-                    pcache.push(clients_list[fd]->pair_fd);  //待配对状态
-                    clients_list.erase(fd);//清除clients_list
-                    //TODO  清除fd_node.  fd_Node里不存备份cache的fd，所以不需要清除
-                    // for(vector<int>::iterator it=fd_node.begin(); it!=fd_node.end(); ){   
-                    //     if(* it == fd){
-                    //         it = fd_node.erase(it); 
-                    //     }
-                    //     else{
-                    //         ++it;
-                    //     }
-                    // }
-                    // 通知主cache，备份cache掉了
-                    string disastermsg = "R" + clients_list[clients_list[fd]->pair_fd]->ip_port;
-                    strcpy(send_buff_disaster, disastermsg.c_str());
-                    send(clients_list[clients_list[fd]->pair_fd]->pair_fd, send_buff_disaster, BUF_SIZE, 0);
-                }
-                else if (clients_list[fd]->status == 'P')  { //掉线的是主cache
-                    clients_list[clients_list[fd]->pair_fd]->pair_fd = -1;  // 备份的配偶清空
-                    clients_list[clients_list[fd]->pair_fd]->status = 'P';  //备份变主
-                    pcache.push(clients_list[fd]->pair_fd);  //待配对状态
-                    //TODO  更改fd_node.
-                    if(clients_list[fd]->pair_fd>0){//如果有备份cache
-                        int index = 0;
-                        for(vector<int>::iterator it=fd_node.begin(); it!=fd_node.end(); ){   
-                            if(* it == fd){
-                                // it = fd_node.erase(it); 
-                                fd_node[index] = clients_list[fd]->pair_fd;
-                                break;
-                            }
-                            else{
-                                ++it;
-                            }
-                            ++index;
-                        }
-                        close(clients_list[fd]->pair_fd);
-                    }
-                    //TODO  通知备份cache变为主cache---------这个具体的通信格式是什么样子的需要令改  发给谁也需要再确认
-                    string disastermsg = "R" + clients_list[clients_list[fd]->pair_fd]->ip_port;
-                    strcpy(send_buff_disaster, disastermsg.c_str());
-                    send(clients_list[clients_list[fd]->pair_fd]->pair_fd, send_buff_disaster, BUF_SIZE, 0);
-
-                    clients_list.erase(fd);//清除clients_list
-
-                }
-            }
-        }
-        sleep(3);
-    }
-}
 // void extendCapability(){
 //     int index = fd_node.size();
 //     cacheAddrHash.addNode(index);

@@ -68,6 +68,8 @@ private:
     std::mutex status_mutex;
     //用于管理缓冲区的锁
     std::mutex kv_mutex;
+    //用于管理退出进程
+    std::mutex end_mutex;
     std::string replica_IP_, port_for_replica;  // TODO：这两行好像不需要了？在69行写了target_IP_, target_port_
     std::string primary_IP_, port_for_primary;
     //向备份发送的信息
