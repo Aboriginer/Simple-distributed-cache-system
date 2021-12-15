@@ -56,7 +56,6 @@ class Cache {
 
 public:
     Cache(int cache_size_local, std::string status_, std::string local_cache_IP, std::string port_for_client, std::string port_for_cache);
-
     // 启动Cache
     void Start();
 
