@@ -31,6 +31,12 @@ namespace cache
 				_cache_items_list.pop_back();
 			}
 		}
+		void erase(const key_t &key) {
+			auto it = _cache_items_map.find(key);
+			if (it != _cache_items_map.end()) {
+				_cache_items_map.erase(it);
+			}
+		}
 
 		const value_t &get(const key_t &key) {
 			auto it = _cache_items_map.find(key);

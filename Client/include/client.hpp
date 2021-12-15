@@ -25,18 +25,20 @@
 const int BUF_SIZE = 0xFFFF;  // 通信缓冲区大小
 
 const char MASTER_IP[10] = "127.0.0.1";
-const int MASTER_PORT = 8889;
+const int MASTER_PORT = 10000;
 const int CACHESEVER_PORT = 8887;
 
-const int KEY_LENGTH = 3;
+const int KEY_LENGTH = 10;
 const int VALUE_LENGTH = 20;
 
 const int MAX_EVENT_NUMBER = 100;
 const int EPOLL_SIZE = 100;
 
-const int REQUEST_INTERVAL = 3000;  // 产生读写请求间隔，单位 ms
+const int REQUEST_INTERVAL = 20;  // 产生读写请求间隔，单位 ms
 
 const int WAITING_TIME = 5;  // 应用层超时重传等待时间，单位 100ms
+
+const int LOST_MAX_NUM = 6;  // 当有6个包没有被响应时判定cache server宕机
 
 // 超时重传回调函数接收的参数
 struct ReSendMassage {
@@ -44,16 +46,19 @@ struct ReSendMassage {
 	std::string addr;
 	std::string massage;
 	std::shared_ptr<Timer> timer;
+	int num = 0; // DEBUG
 };
 
 class Client {
 
 public:
-	Client(int cache_size_local, char mode);
+	Client(int cache_size_local, char mode, bool from_file);
 	void init();
 
 	void start();
 
+
+private:
 	void connect_master();
 
 	// 检查cache_server的请求是否收到回复，
@@ -85,9 +90,10 @@ public:
 
 	void cache_server_resend(void* pData);
 
-private:
-	// client的模式 -w write；-r read
+
+	// client的模式 -w write, -r read, -f 读取本地文件
 	char mode_;
+	char from_file_;
 
 	epoll_event events_[MAX_EVENT_NUMBER];
 
