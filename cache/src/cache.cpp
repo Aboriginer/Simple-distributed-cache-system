@@ -113,8 +113,6 @@ void Cache::Heartbeat() {
     static auto timer = std::make_shared<Timer> (1000, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
     timer->setCallback([this](void * pdata){
 
-
-        // bool initial_flag = false;
         char send_buff_master[BUF_SIZE], recv_buff_master[BUF_SIZE];
         std::string master_port = std::to_string(MASTER_PORT);
 
@@ -129,13 +127,15 @@ void Cache::Heartbeat() {
         bzero(send_buff_master, BUF_SIZE);
         bzero(recv_buff_master, BUF_SIZE);
 
-
+        i ++;
         bzero(recv_buff_master, BUF_SIZE);
         // 设置为非阻塞模式接收信息
         int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
         std::cout << "================len:" << len << std::endl;
         std::cout << "recv:" << recv_buff_master << std::endl;
+        std::cout << "=====================i:" << i << std::endl;
         if (len != 0 && initial_flag)   ReadFromMaster(recv_buff_master);
+        std::cout << "===================== second i:" << i << std::endl;
         while (!initial_flag && len > 0) {
             initial(cache_master_sock, recv_buff_master);
             if(is_initialed == NO_INIT){
@@ -147,6 +147,7 @@ void Cache::Heartbeat() {
             }
             initial_flag = true;
         }
+        std::cout << "===================== last i:" << i << std::endl;
     });
     timer->start();
 }
@@ -337,6 +338,7 @@ void Cache::ReadFromMaster(std::string message) {
         else if(part_num == 2)return str.substr(spear + 1, str.size() - spear -1);
     };
     std::string head = message.substr(0,1);   //P或者R
+    std::cout << "====================ReadFromMaster i:" << i << std::endl;
     std::lock_guard<std::mutex> guard(status_mutex);
     if(head == "K"){
         dying_cache_IP_ = part(message, spear, 1);
@@ -349,8 +351,10 @@ void Cache::ReadFromMaster(std::string message) {
     }else if(head == "N"){
         std::string neo_cache_IP = part(message, spear, 1);
         std::string neo_cache_Port = part(message, spear, 2);
+        // TODO:感觉初始化后的N，还是需要unique
         update_cache(neo_cache_IP, neo_cache_Port, "N");
     }else if(head =="P"){
+        // TODO:调试心跳暂时注释
         status_ = head;
         pr_status_ = "P";   // 用于备份转正
         target_IP_  = part(message, spear, 1);
@@ -396,6 +400,7 @@ void Cache::ReadFromMaster(std::string message) {
         auto it  = find_if(cache_list.begin(), cache_list.end(), equal);
         cache_list.erase(it);
     }
+    std::cout << "====================ReadFromMaster after i:" << i << std::endl;
 }
 
 //扩缩容函数
