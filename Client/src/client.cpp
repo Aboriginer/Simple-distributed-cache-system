@@ -2,9 +2,10 @@
 
 typedef std::function<void (void *)> fp;
 
-Client::Client(int cache_size_local,char mode) {
+Client::Client(int cache_size_local, char mode, bool from_file) {
 	mode_ = mode;
-	
+	from_file_ = from_file;
+
 	cache_size_local_ = cache_size_local;
 	local_lru_ = std::make_shared<
 		cache::lru_cache<std::string, std::string>>(cache_size_local_);
@@ -59,27 +60,24 @@ void Client::start() {
 		// 进入子进程，子进程负责随机产生key发送给父进程
 		close(pipe_fd_[0]);
 
+		std::string key;
 		while (true) {
-			if (mode_ == 'r') {
-				//read模式，读本地key_list文件
+			if (from_file_) {
 				std::ifstream key_list_file("./key_list.txt");
-				std::string key;
 				if (!key_list_file.is_open()) { 
 					LOG(ERROR) << "Open key_list file failed";
 				}
 				while(!key_list_file.eof()) { 
 					usleep(REQUEST_INTERVAL * 1000);
 					key_list_file >> key;
-					send_key_to_father(key, 'r');
 					std::cout << "Read from key_list file, key = " << key << std::endl;
+					send_key_to_father(key, mode_);
 				} 
 				key_list_file.close();
-			} else if (mode_ == 'w') {
-				// write模式，随机生成
-				std::string key = strRand(KEY_LENGTH);
-				send_key_to_father(key, 'w');
-				std::cout << key << std::endl;
+			} else {
 				usleep(REQUEST_INTERVAL * 1000);
+				key = strRand(KEY_LENGTH);
+				send_key_to_father(key, mode_);
 			}
 		}
 	} else {
@@ -128,8 +126,8 @@ void Client::connect_master() {
 
 void Client::check_cache_server_request_map() {
 	for(auto it = request_map_.begin(); it != request_map_.end(); ++it) {
-		if (it->second.size() > 5) {
-			// 当有5个请求没有被响应时判定为宕机
+		if (it->second.size() > LOST_MAX_NUM) {
+			// 当有LOST_MAX_NUM个请求没有被响应时判定为宕机
 			LOG(INFO) << "The cache server may be down: " + it->first;
 
 			// 将未被响应的key重新向master请求分布
@@ -137,6 +135,7 @@ void Client::check_cache_server_request_map() {
 				// TODO: 协商数据包格式
 				send_request_to_master(*it2);
 				LOG(ERROR) << "Re-send to master, key: " + *it2;
+				usleep(10 * 1000);
 			}
 			it->second.clear();
 		}
@@ -151,6 +150,7 @@ void Client::send_key_to_father(const std::string key, const char mode) {
 }
 
 void Client::send_request_to_master(const std::string &key) {
+	std::cout << "Request to master, key: " << key << std::endl;
 	std::string send_tmp = key;
 	send(master_sock_, send_tmp.data(), BUF_SIZE, 0);
 
@@ -202,6 +202,8 @@ void Client::send_request_to_cache_server(const std::string &addr,
 		cache_server_timers_[addr].timer->setData(&cache_server_timers_[addr]);
 		cache_server_timers_[addr].timer->start();
 	}
+	std::cout << "Num of request to " + addr + " is " + 
+							 std::to_string(++cache_server_timers_[addr].num) << std::endl;
 }
 
 void Client::dealwith_child(const char* message) {
@@ -230,14 +232,15 @@ void Client::dealwith_child(const char* message) {
 }
 
 void Client::dealwith_master(const char* message) {
-	std::cout << "Master to client: "<< message << std::endl;
 	master_timer_->stop();
-	if(!message) {
-		return;
-	}
+
 	// message example: MASTER#key#ip:port
 	std::vector<std::string> message_array;
 	split(message, message_array, '#');
+	if (message_array.size() != 3) {
+		LOG(ERROR) << "Recved message from Master error";
+		return;
+	}
 	std::string& state = message_array[0];
 	std::string& key = message_array[1];
 	
@@ -265,11 +268,23 @@ void Client::dealwith_cache_server(const char* message) {
 	std::string& state = message_array[0];
 	std::string& key = message_array[1];
 	std::string& addr = message_array[2];
-	if (state == "SUCCESS" || state == "FAILED") {
+	if (state == "SUCCESS") {
 		erase_item_from_request_map(addr, key);
 		cache_server_timers_[addr].timer->stop();
-		std::cout << "Request to cache server " + state + " key = " + key 
-							<< " addr = " + addr << std::endl;
+		if (message_array.size() == 3) {
+			std::cout << "Request to cache server " + state + " key: " + key
+								<< " cache addr: " + addr << std::endl;
+		} else if (message_array.size() == 4) {
+			std::cout << "Request to cache server " + state + " key: " + key
+								<< " value: " + message_array[3]
+								<< " cache addr: " + addr << std::endl;
+		}
+	} else if (state == "FAILED") {
+		erase_item_from_request_map(addr, key);
+		local_lru_->erase(key);  // 从本地缓存中删除
+		cache_server_timers_[addr].timer->stop();
+		std::cout << "Request to cache server " + state + " key: " + key
+							<< " cache addr: " + addr << std::endl;
 	}
 }
 
