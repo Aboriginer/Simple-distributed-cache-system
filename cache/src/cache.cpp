@@ -34,7 +34,7 @@ void Cache::Start() {
 
 //    for_replica.join();
 //    for_cache.join();
-    for_client.join();
+//    for_client.join();
     for_master_Heartbeat.join();
 }
 
@@ -57,6 +57,7 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
     vector<std::string> ip, port;
     std::string tmp;
     std::cout<<"receving initial message from master."<<std::endl;
+    std::cout << "========================receving ip#port:" << recv_buff_initial << std::endl;
     for(int i = 0; i < strlen(recv_buff_initial); i++){
         char single = recv_buff_initial[i];
         if(single != '#'){
@@ -87,61 +88,30 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
     is_initialed = SUCCESS_INIT;
 }
 
-//void Cache::Heartbeat() {
-//    static auto timer = std::make_shared<Timer> (500, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
-//    timer->setCallback([this](void * pdata){
-//        bool initial_flag = false;
-//        // 向master发送的心跳包
-//        char send_buff_master[BUF_SIZE], recv_buff_master[BUF_SIZE];
-//        std::string master_port = std::to_string(MASTER_PORT);
-//        static int cache_master_sock = client_socket(MASTER_IP, master_port);
-//        std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + status_;
-//        strcpy(send_buff_master, heart_message.data());
-//        std::cout << "Send message:" << send_buff_master << std::endl;
-//        send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
-//        std::cout << "Heartbeat successfully!" << std::endl;
-//        bzero(send_buff_master, BUF_SIZE);
-//        bzero(recv_buff_master, BUF_SIZE);
-//
-//        while (!initial_flag) {
-//            initial(cache_master_sock, recv_buff_master);
-//            if(is_initialed == NO_INIT){
-//                std::cout<<"ERROR: the cache is not initiated. "<<std::endl;
-//                exit(EXIT_FAILURE);
-//            }else if(is_initialed == ERROR_INIT){
-//                std::cout<<"ERROR: something wrong when initiating the cache."<<std::endl;
-//                exit(EXIT_FAILURE);
-//            }
-//            initial_flag = true;
-//        }
-//
-//        bzero(recv_buff_master, BUF_SIZE);
-//        recv(cache_master_sock, recv_buff_master, BUF_SIZE, 0);
-//        ReadFromMaster(recv_buff_master);
-//    });
-//    timer->start();
-//}
-
 
 void Cache::Heartbeat() {
     static auto timer = std::make_shared<Timer> (1000, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
     timer->setCallback([this](void * pdata){
-//    while (true) {
+
+
+
         bool initial_flag = false;
         char send_buff_master[BUF_SIZE], recv_buff_master[BUF_SIZE];
         std::string master_port = std::to_string(MASTER_PORT);
 
         static int cache_master_sock = client_socket(MASTER_IP, master_port);
 
-        std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + status_;
-        strcpy(send_buff_master, heart_message.data());
-        std::cout << "Send message:" << send_buff_master << std::endl;
-        send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
-        std::cout << "Heartbeat successfully!" << std::endl;
-        bzero(send_buff_master, BUF_SIZE);
-        bzero(recv_buff_master, BUF_SIZE);
+//        while (true) {
+            std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + pr_status_;
+//            std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + port_for_cache_ + "#" + pr_status_;
+            strcpy(send_buff_master, heart_message.data());
+            std::cout << "Send message:" << send_buff_master << std::endl;
+            send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
+            std::cout << "Heartbeat successfully!" << std::endl;
+            bzero(send_buff_master, BUF_SIZE);
+            bzero(recv_buff_master, BUF_SIZE);
 
-//        // TODO:显示IP和port不一一配对，尚未明确是master发送的数据未配对还是这边解析不对
+//        // TODO:显示IP和port不一一配对，原因是master先发送的是扩容信息N，应该是向新增cache先发送cache list
 //        while (!initial_flag) {
 //            initial(cache_master_sock, recv_buff_master);
 //            if(is_initialed == NO_INIT){
@@ -153,15 +123,16 @@ void Cache::Heartbeat() {
 //            }
 //            initial_flag = true;
 //        }
-
+//
         bzero(recv_buff_master, BUF_SIZE);
         // 设置为非阻塞模式接收信息
-        recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
-        ReadFromMaster(recv_buff_master);
+        int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
+        if (len != 0)   ReadFromMaster(recv_buff_master);
+
+//        sleep(3);
+//        }
     });
     timer->start();
-//        sleep(3);
-//    }
 }
 
 void Cache::Client_chat() {
@@ -235,7 +206,7 @@ void Cache::Client_chat() {
         int epoll_events_count = epoll_wait(epfd, client_events, EPOLL_SIZE, -1);
 
         if (epoll_events_count < 0) {
-            perror("epoll failure");
+//            perror("epoll failure");
 //            break;
             continue;
         }
@@ -396,13 +367,14 @@ void Cache::ReadFromMaster(std::string message) {
         if(dying_cache_IP_ == local_cache_IP_ && dying_cache_Port == port_for_cache_){
             status_ = "K";
         }
-        update_cache(dying_cache_IP_, dying_cache_Port, "K");
+        update_cache(dying_cache_IP_, dying_cache_Port, "K"); // 更新cache_list
     }else if(head == "N"){
         std::string neo_cache_IP = message.substr(2,spear);
         std::string neo_cache_Port = message.substr(spear + 1, message.size());
         update_cache(neo_cache_IP, neo_cache_Port, "N");
     }else if(head =="P"){
         status_ = head;
+        // TODO:这里直接改成targetIP_?
         replica_IP_ = message.substr(2, spear);
         port_for_replica = message.substr(spear + 1, message.size());
     }else if(head == "R"){
@@ -424,6 +396,7 @@ void Cache::cache_pass(){
     // //     otherPort.push_back("8888");
     // // }
     std::lock_guard<std::mutex> lock_gurad(status_mutex);
+    // TODO:删除缩容IP的过程和传递key要不要加锁？
     if(status_ == "K"){
         // TODO：otherIP是啥含义，要缩容的所有IP？
         if(otherIP.size() == 0){
