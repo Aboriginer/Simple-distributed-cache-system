@@ -517,151 +517,162 @@ void Cache::update_cache(std::string &IP, std::string &port,std::string status){
     cache_list_update_flag = true;
 }
 
-
-// 容灾
-void Cache::replica_chat() {
+void Cache::primary_cache() {
+    int clnt_sock;
+    struct sockaddr_in clnt_adr;
+    socklen_t clnt_adr_sz = sizeof(clnt_adr);
+    int port_for_replica = stoi(port_for_cache_) + 1;
+    std::string port_for_replica_ = std::to_string(port_for_replica);
+    std::cout << "port_for_replica_:" << port_for_replica_ << std::endl;
+    int serv_sock = server_socket(local_cache_IP_, port_for_replica_);
+    clnt_sock = accept(serv_sock, (struct sockaddr *) &clnt_adr, &clnt_adr_sz);
     while (true) {
-        // 接收Master心跳包时要更新pr_status_
-        if (pr_status_ == "P") {   // 本地cache是主cache，作为服务器端
-            int clnt_sock;
-            struct sockaddr_in clnt_adr;
-            socklen_t clnt_adr_sz = sizeof(clnt_adr);
-            int serv_sock = server_socket(local_cache_IP_, port_for_cache_);
-            clnt_sock = accept(serv_sock, (struct sockaddr*)&clnt_adr, &clnt_adr_sz);
+        if (target_port_ != "None") {    // 确定备bind error份cache已上线
+            std::cout << "client connection from:" << inet_ntoa(clnt_adr.sin_addr) << ":"
+                      << ntohs(clnt_adr.sin_port) << ", client_fd = " << clnt_sock << std::endl;
 
-            if (target_port_ != "None") {    // 确定备份cache已上线
-                std::cout << "client connection from:" << inet_ntoa(clnt_adr.sin_addr) << ":"
-                          << ntohs(clnt_adr.sin_port) << ", client_fd = " << clnt_sock << std::endl;
-
-                std::string send_message;
-                char send_buff_replica[BUF_SIZE];
-                while (true) {
-//                    std::cout << "server>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
-                    // cache_list_update_flag = true;  // 用于测试
-                    // kv_update_flag = true;  // 用于测试
-                    if (cache_list_update_flag) {   // cache_list有更新
-                        std::cout << "Need to write cache_list" << std::endl;
-                        send_message.clear();
-                        bzero(send_buff_replica, BUF_SIZE);
-                        // 写入更新的cache_list
-                        send_message = "#"; // 第一个字符是'#', 则表示收到的是cache_list
-                        //现在开始传输哈希表
-                        // TODO:cache_list是不是需要加锁
-                        for(auto it : cache_list){
-                            send_message += it.first + "#" +it.second;
-                        }
-
-                        std::cout << "Send cache_list to replica cache, fd = " << clnt_sock << std::endl;
-                        strcpy(send_buff_replica, send_message.data());
-                        send(clnt_sock, send_buff_replica, BUF_SIZE, 0);
-                        std::cout << "Send message:" << send_buff_replica << std::endl;
-                        cache_list_update_flag = false; // 成功写入cache_list
+            std::string send_message;
+            char send_buff_replica[BUF_SIZE];
+            while (true) {
+                //                    std::cout << "server>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
+                // cache_list_update_flag = true;  // 用于测试
+                // kv_update_flag = true;  // 用于测试
+                if (cache_list_update_flag) {   // cache_list有更新
+                    std::cout << "Need to write cache_list" << std::endl;
+                    send_message.clear();
+                    bzero(send_buff_replica, BUF_SIZE);
+                    // 写入更新的cache_list
+                    send_message = "#"; // 第一个字符是'#', 则表示收到的是cache_list
+                    //现在开始传输哈希表
+                    // TODO:cache_list是不是需要加锁
+                    for (auto it : cache_list) {
+                        send_message += it.first + "#" + it.second;
                     }
-                    if (kv_update_flag) {
-                        std::cout << "Need to write key/key#value" << std::endl;
-                        send_message.clear();
-                        bzero(send_buff_replica, BUF_SIZE);
-                        kv_mutex.lock();
-                        send_message = kv_to_replica;
-                        kv_mutex.unlock();
-                        std::cout << "Send key/key#value to replica cache, fd = " << clnt_sock << std::endl;
-                        strcpy(send_buff_replica, send_message.data());
-                        send(clnt_sock, send_buff_replica, BUF_SIZE, 0);
-                        std::cout << "Send message:" << send_buff_replica << std::endl;
-                        kv_update_flag = false; // 成功写入cache_list
-                    }
-                    // sleep(3);   // TODO:测试用，需删除
+
+                    std::cout << "Send cache_list to replica cache, fd = " << clnt_sock << std::endl;
+                    strcpy(send_buff_replica, send_message.data());
+                    send(clnt_sock, send_buff_replica, BUF_SIZE, 0);
+                    std::cout << "Send message:" << send_buff_replica << std::endl;
+                    cache_list_update_flag = false; // 成功写入cache_list
                 }
-                close(clnt_sock);
-            }
-        }   else {  // 本地cache是备份cache，作为客户端
-            // TODO:
-//            target_port_ = "8899";
-//            target_IP_ = "127.0.0.1";
-            if (target_port_ != "None") {
-                std::string recv_message;
-                char recv_buff_primary[BUF_SIZE];
-                std::cout << "Server connection from, IP:" << target_IP_ << ",port:" << target_port_ << std::endl;
-                int clnt_sock = client_socket(target_IP_, target_port_);
-                while (true) {
-                    if (pr_status_ != "R") {
-                        std::cout << "Disaster recovery starts, Replica cache =====> Primary cache successfully" << std::endl;
-                        break;  // 备份cache转正
-                    }
-                    recv_message.clear();
-                    bzero(recv_buff_primary, BUF_SIZE);
-                    int len = recv(clnt_sock, recv_buff_primary, BUF_SIZE, 0);
-                    recv_message = std::string(recv_buff_primary);
-                    std::cout << "Receive from primary cache:" << recv_message << std::endl;
-                    // 解析收到的recv_message，写入备份的LRU中
-                    if (recv_message[0] == '#') {   // 收到更新的cache_list
-                        //上锁，防止主cache提前推出。
-                        end_mutex.lock();
-                        std::cout << "Receive cache_list" << std::endl;
-                        std::vector<std::string> ip, port;
-                        std::string tmp;
-                        int count  = 0;
-                        for(int i = 1; i < recv_message.size(); i++){
-                            char single = recv_message[i];
-                            if(single != '#'){
-                                tmp += single;
-                            }else{
-                                if(count % 2 == 0) ip.push_back(tmp);
-                                else port.push_back(tmp);
-                                tmp.clear();
-                                count++;
-                            }
-                        }
-                        port.push_back(tmp);
-                        if(ip.size() != port.size()){
-                            std::cout<<"wrong message."<<std::endl;
-                        }else{
-                            for(int i = 0; i < ip.size(); i++){
-    //                            auto pair = {ip[i], port[i]};
-                                pair <std::string , std::string> pair (ip[i], port[i]);
-                                cache_list.emplace_back(pair);
-                            }
-                        }
-                        //解锁。
-                        end_mutex.unlock();
-                        // TODO：这里要是有问题可以直接到ReadFromMaster中下线备份cache
-                        // 主cache缩容后，备份cache下线
-                        std::pair<std::string, std::string> local_pair = {target_IP_, target_port_};
-                        auto equal = [&local_pair](std::pair<std::string, std::string> &a){
-                            return a.first == local_pair.first &&a.second == local_pair.second;
-                        };
-                        if (find_if(cache_list.begin(), cache_list.end(), equal) == cache_list.end()) {
-                            exit(0);
-                        }
-
-                    }
-                    else{   // 收到更新的key/key#value
-                        std::cout << "Receive key/key#value" << std::endl;
-                        int spear = 0;
-                        for (int i = 0; i < recv_message.size(); i++) {
-                            if (recv_message[i] != '#') {
-                                ++spear;
-                            } else {
-                                break;
-                            }
-                        }
-                        if(spear == recv_message.size()){
-                            std::string key = recv_message;
-                            if(MainCache.check(key) > 0){
-                                MainCache.get(key);
-                            }
-                        }else{
-                            std::string key = recv_message.substr(0, spear);
-                            std::string val = recv_message.substr(spear + 1, recv_message.size());
-                            MainCache.put(key, val);
-                        }
-                    }
+                if (kv_update_flag) {
+                    std::cout << "Need to write key/key#value" << std::endl;
+                    send_message.clear();
+                    bzero(send_buff_replica, BUF_SIZE);
+                    kv_mutex.lock();
+                    send_message = kv_to_replica;
+                    kv_mutex.unlock();
+                    std::cout << "Send key/key#value to replica cache, fd = " << clnt_sock << std::endl;
+                    strcpy(send_buff_replica, send_message.data());
+                    send(clnt_sock, send_buff_replica, BUF_SIZE, 0);
+                    std::cout << "Send message:" << send_buff_replica << std::endl;
+                    kv_update_flag = false; // 成功写入cache_list
                 }
-                close(clnt_sock);
+                // sleep(3);   // TODO:测试用，需删除
             }
+            close(clnt_sock);
         }
     }
 }
+
+void Cache::replica_cache() {
+    std::string recv_message;
+    char recv_buff_primary[BUF_SIZE];
+    int port_for_replica = stoi(target_port_) + 1;
+    std::string port_for_replica_ = std::to_string(port_for_replica);
+    std::cout << "Server connection from, IP:" << target_IP_ << ",port:" << port_for_replica_ << std::endl;
+    int clnt_sock = client_socket(target_IP_, port_for_replica_);
+    while (true) {
+        if (pr_status_ != "R") {
+            std::cout << "Disaster recovery starts, Replica cache =====> Primary cache successfully" << std::endl;
+            break;  // 备份cache转正
+        }
+        recv_message.clear();
+        bzero(recv_buff_primary, BUF_SIZE);
+        int len = recv(clnt_sock, recv_buff_primary, BUF_SIZE, 0);
+        recv_message = std::string(recv_buff_primary);
+//        std::cout << "Receive from primary cache:" << recv_message << std::endl;
+        // 解析收到的recv_message，写入备份的LRU中
+        if (recv_message[0] == '#') {   // 收到更新的cache_list
+            //上锁，防止主cache提前推出。
+            end_mutex.lock();
+            std::cout << "Receive cache_list" << std::endl;
+            std::vector<std::string> ip, port;
+            std::string tmp;
+            int count = 0;
+            for (int i = 1; i < recv_message.size(); i++) {
+                char single = recv_message[i];
+                if (single != '#') {
+                    tmp += single;
+                } else {
+                    if (count % 2 == 0) ip.push_back(tmp);
+                    else port.push_back(tmp);
+                    tmp.clear();
+                    count++;
+                }
+            }
+            port.push_back(tmp);
+            if (ip.size() != port.size()) {
+                std::cout << "wrong message." << std::endl;
+            } else {
+                for (int i = 0; i < ip.size(); i++) {
+                    //                            auto pair = {ip[i], port[i]};
+                    pair<std::string, std::string> pair(ip[i], port[i]);
+                    cache_list.emplace_back(pair);
+                }
+            }
+            //解锁。
+            end_mutex.unlock();
+            // TODO：这里要是有问题可以直接到ReadFromMaster中下线备份cache
+            // 主cache缩容后，备份cache下线
+            std::pair<std::string, std::string> local_pair = {target_IP_, target_port_};
+            auto equal = [&local_pair](std::pair<std::string, std::string> &a) {
+                return a.first == local_pair.first && a.second == local_pair.second;
+            };
+            if (find_if(cache_list.begin(), cache_list.end(), equal) == cache_list.end()) {
+                exit(0);
+            }
+
+        } else {   // 收到更新的key/key#value
+//            std::cout << "Receive key/key#value" << std::endl;
+            int spear = 0;
+            for (int i = 0; i < recv_message.size(); i++) {
+                if (recv_message[i] != '#') {
+                    ++spear;
+                } else {
+                    break;
+                }
+            }
+            if (spear == recv_message.size()) {
+                std::string key = recv_message;
+                if (MainCache.check(key) > 0) {
+                    MainCache.get(key);
+                }
+            } else {
+                std::string key = recv_message.substr(0, spear);
+                std::string val = recv_message.substr(spear + 1, recv_message.size());
+                MainCache.put(key, val);
+            }
+        }
+    }
+    close(clnt_sock);
+}
+
+// 容灾
+void Cache::replica_chat() {
+    if (pr_status_ == "P") {   // 本地cache是主cache，作为服务器端
+        primary_cache();
+    } else {  // 本地cache是备份cache，作为客户端
+        // 直到master将备份分配给对应的主Cache，才跳出循环
+        // TODO：这里可以想想怎么改进
+        while (target_port_ == "None") {
+//            std::cout << ">>>>>>>>>>>>>>>>>>>>>No Primary cache<<<<<<<<<<<<<<<<<" << std::endl;
+        }
+        replica_cache();
+        if (pr_status_ == "P") primary_cache();
+    }
+}
+
 
 void Cache::cal_hash_key() {
     std::vector<std::string> caches;
@@ -721,8 +732,10 @@ int server_socket(std::string server_IP, std::string server_port) {
         exit(1);
     }
 
+//    std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>server port:" << server_port << std::endl;
     if (bind(serv_sock, (struct sockaddr *) &serv_adr, sizeof(serv_adr)) == -1) {
         fprintf(stderr, "bind error\n");
+        printf("Error code: %d\n", errno);
         exit(EXIT_FAILURE);
     }
 

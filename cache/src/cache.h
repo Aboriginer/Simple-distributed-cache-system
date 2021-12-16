@@ -92,6 +92,8 @@ private:
     // 与client通信
     void Client_chat();
     // 容灾通信
+    void primary_cache();
+    void replica_cache();
     void replica_chat();
     // 与cache server通信
     void cache_pass();
