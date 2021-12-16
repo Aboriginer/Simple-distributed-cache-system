@@ -471,6 +471,7 @@ void Cache::cache_pass(){
         }
         //这把锁在to_replica线程里也会被管理，只有那里被解锁之后才能进行exit操作。
         end_mutex.lock();
+        std::cout << "?????????????????????????????exit" << std::endl;
         exit(0);
         end_mutex.unlock();
     }else if(status_ == "P"){
@@ -578,86 +579,87 @@ void Cache::replica_chat() {
                 close(clnt_sock);
             }
         }   else {  // 本地cache是备份cache，作为客户端
-
-            std::string recv_message;
-            char recv_buff_primary[BUF_SIZE];
-            std::cout << "Server connection from:";
-            int clnt_sock = client_socket(target_IP_, target_port_);
-            while (true) {
-                if (pr_status_ != "R") {
-                    std::cout << "Disaster recovery starts, Replica cache =====> Primary cache successfully" << std::endl;
-                    break;  // 备份cache转正
-                }
-                recv_message.clear();
-                bzero(recv_buff_primary, BUF_SIZE);
-                int len = recv(clnt_sock, recv_buff_primary, BUF_SIZE, 0);
-                recv_message = std::string(recv_buff_primary);
-                std::cout << "Receive from primary cache:" << recv_message << std::endl;
-                // 解析收到的recv_message，写入备份的LRU中
-                if (recv_message[0] == '#') {   // 收到更新的cache_list
-                    //上锁，防止主cache提前推出。
-                    end_mutex.lock();
-                    std::cout << "Receive cache_list" << std::endl;
-                    std::vector<std::string> ip, port;
-                    std::string tmp;
-                    int count  = 0;
-                    for(int i = 1; i < recv_message.size(); i++){
-                        char single = recv_message[i];
-                        if(single != '#'){
-                            tmp += single;
+            if (target_port_ != "None") {
+                std::string recv_message;
+                char recv_buff_primary[BUF_SIZE];
+                std::cout << "Server connection from:";
+                int clnt_sock = client_socket(target_IP_, target_port_);
+                while (true) {
+                    if (pr_status_ != "R") {
+                        std::cout << "Disaster recovery starts, Replica cache =====> Primary cache successfully" << std::endl;
+                        break;  // 备份cache转正
+                    }
+                    recv_message.clear();
+                    bzero(recv_buff_primary, BUF_SIZE);
+                    int len = recv(clnt_sock, recv_buff_primary, BUF_SIZE, 0);
+                    recv_message = std::string(recv_buff_primary);
+                    std::cout << "Receive from primary cache:" << recv_message << std::endl;
+                    // 解析收到的recv_message，写入备份的LRU中
+                    if (recv_message[0] == '#') {   // 收到更新的cache_list
+                        //上锁，防止主cache提前推出。
+                        end_mutex.lock();
+                        std::cout << "Receive cache_list" << std::endl;
+                        std::vector<std::string> ip, port;
+                        std::string tmp;
+                        int count  = 0;
+                        for(int i = 1; i < recv_message.size(); i++){
+                            char single = recv_message[i];
+                            if(single != '#'){
+                                tmp += single;
+                            }else{
+                                if(count % 2 == 0) ip.push_back(tmp);
+                                else port.push_back(tmp);
+                                tmp.clear();
+                                count++;
+                            }
+                        }
+                        port.push_back(tmp);
+                        if(ip.size() != port.size()){
+                            std::cout<<"wrong message."<<std::endl;
                         }else{
-                            if(count % 2 == 0) ip.push_back(tmp);
-                            else port.push_back(tmp);
-                            tmp.clear();
-                            count++;
+                            for(int i = 0; i < ip.size(); i++){
+    //                            auto pair = {ip[i], port[i]};
+                                pair <std::string , std::string> pair (ip[i], port[i]);
+                                cache_list.emplace_back(pair);
+                            }
                         }
-                    }
-                    port.push_back(tmp);
-                    if(ip.size() != port.size()){
-                        std::cout<<"wrong message."<<std::endl;
-                    }else{
-                        for(int i = 0; i < ip.size(); i++){
-//                            auto pair = {ip[i], port[i]};
-                            pair <std::string , std::string> pair (ip[i], port[i]);
-                            cache_list.emplace_back(pair);
+                        //解锁。
+                        end_mutex.unlock();
+                        // TODO：这里要是有问题可以直接到ReadFromMaster中下线备份cache
+                        // 主cache缩容后，备份cache下线
+                        std::pair<std::string, std::string> local_pair = {target_IP_, target_port_};
+                        auto equal = [&local_pair](std::pair<std::string, std::string> &a){
+                            return a.first == local_pair.first &&a.second == local_pair.second;
+                        };
+                        if (find_if(cache_list.begin(), cache_list.end(), equal) == cache_list.end()) {
+                            exit(0);
                         }
-                    }
-                    //解锁。
-                    end_mutex.unlock();
-                    // TODO：这里要是有问题可以直接到ReadFromMaster中下线备份cache
-                    // 主cache缩容后，备份cache下线
-                    std::pair<std::string, std::string> local_pair = {target_IP_, target_port_};
-                    auto equal = [&local_pair](std::pair<std::string, std::string> &a){
-                        return a.first == local_pair.first &&a.second == local_pair.second;
-                    };
-                    if (find_if(cache_list.begin(), cache_list.end(), equal) == cache_list.end()) {
-                        exit(0);
-                    }
 
-                }
-                else{   // 收到更新的key/key#value
-                    std::cout << "Receive key/key#value" << std::endl;
-                    int spear = 0;
-                    for (int i = 0; i < recv_message.size(); i++) {
-                        if (recv_message[i] != '#') {
-                            ++spear;
-                        } else {
-                            break;
+                    }
+                    else{   // 收到更新的key/key#value
+                        std::cout << "Receive key/key#value" << std::endl;
+                        int spear = 0;
+                        for (int i = 0; i < recv_message.size(); i++) {
+                            if (recv_message[i] != '#') {
+                                ++spear;
+                            } else {
+                                break;
+                            }
+                        }
+                        if(spear == recv_message.size()){
+                            std::string key = recv_message;
+                            if(MainCache.check(key) > 0){
+                                MainCache.get(key);
+                            }
+                        }else{
+                            std::string key = recv_message.substr(0, spear);
+                            std::string val = recv_message.substr(spear + 1, recv_message.size());
+                            MainCache.put(key, val);
                         }
                     }
-                    if(spear == recv_message.size()){
-                        std::string key = recv_message;
-                        if(MainCache.check(key) > 0){
-                            MainCache.get(key);
-                        }
-                    }else{
-                        std::string key = recv_message.substr(0, spear);
-                        std::string val = recv_message.substr(spear + 1, recv_message.size());
-                        MainCache.put(key, val);
-                    }
                 }
+                close(clnt_sock);
             }
-            close(clnt_sock);
         }
     }
 }
