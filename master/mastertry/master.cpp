@@ -456,6 +456,8 @@ bool Master::heartBeatDetect(int fd)
     return false;
 }
 
+
+
 void Master::periodicDetectCache()
 {
     char send_buff_disaster[BUF_SIZE];
@@ -463,149 +465,129 @@ void Master::periodicDetectCache()
     {
         // 周期性更新本地的cache时间戳的表
         // cout << "caches_list.size(): " << caches_list.size() << ", fd_node.size()" << fd_node.size() << endl;
-        if (caches_list.size() > 0)
+        // std::unordered_map<int, struct fdmap *>::iterator itcache;
+        int deletefd = -1;
+        for (auto itcache : caches_list)
         {
-            for (auto it : caches_list)
-            {
-                int fd = it.second->fd;
-                time_t timeNow;
-                time(&timeNow);
-                if (heartBeatDetect(fd))
-                { //存活
-
-                    continue;
+            int fd = itcache.second->fd;
+            time_t timeNow;
+            time(&timeNow);
+            if (heartBeatDetect(fd))
+            { //存活
+                deletefd = -1;
+                continue;
+            }
+            else
+            {   //不存活
+                deletefd = fd;
+                //容灾
+                // 2）如果是备份cache_2掉线后，
+                // 则master通知主cache，她没有备份cache了
+                if (caches_list[fd]->status == 'R')
+                { //掉线的是备份cache
+                    cout << "the backup cache is disaster " << endl;
+                    caches_list[caches_list[fd]->pair_fd]->pair_fd = -1; // 配偶清空
+                    pcache.push(caches_list[fd]->pair_fd);               //待配对状态
+                    close(fd);
                 }
-                else
-                {   //不存活
-                    //容灾
-                    // 2）如果是备份cache_2掉线后，
-                    // 则master通知主cache，她没有备份cache了
-                    if (caches_list[fd]->status == 'R')
-                    { //掉线的是备份cache
-                        cout << "the backup cache is disaster " << endl;
+                // 1）如果是主cache_1掉线后，
+                // 如果cache_1有备份cache_2，则master设置将备份cache_2变为主cache，并且master通知备份cache_2现在是主cache，通知所有cache，将原本存ip_port的数据里，cache_1的位置更新为cache_2的位置
+                // 如果cache_1没有备份cache，则master通知所有cache，将原本存ip_port的数据里,cache_1的数据删除，并且找到cache_1对应的cache索引index，删除哈希里的对应节点
+                else if (caches_list[fd]->status == 'P')
+                { //掉线的是主cache
+                    cout << "the main cache is disaster and the fd is " << fd << ", addr is " << caches_list[fd]->ip_cache << endl;
+                    if (caches_list[fd]->pair_fd > 0)
+                    { //如果有备份cache
+                        cout << "the main cache has backup cache, and the backup cache fd is " << caches_list[fd]->pair_fd << ", addr is " << caches_list[caches_list[fd]->pair_fd]->ip_cache << endl;
+                        // 更改本地fd_node
+                        int index = 0;
+                        for (vector<int>::iterator it = fd_node.begin(); it != fd_node.end();)
+                        {
+                            if (*it == fd)
+                            {
+                                // it = fd_node.erase(it);
+                                fd_node[index] = caches_list[fd]->pair_fd; // 把fd更改了
+                                cout << "change fd_node: " << fd << "->" << caches_list[fd]->pair_fd << endl;
+                                break;
+                            }
+                            else
+                            {
+                                ++it;
+                            }
+                            ++index;
+                        }
+                        // master通知所有cache，将原本存ip_port的数据里，cache_1的位置更新为cache_2的位置
+                        //------------------------------------------------------
+                        // C#origin_ip#origin_port#backup_ip#backup_port
+                        //------------------------------------------------------
+                        //C#origin_ip:origin_port#backup_ip:backup_cache
+                        string tmpstr = caches_list[fd]->ip_cache;
+                        string str1 = tmpstr.replace(caches_list[fd]->ip_cache.find("#"), 1, ":");
+                        tmpstr = caches_list[caches_list[fd]->pair_fd]->ip_cache;
+                        string str2 = tmpstr.replace(caches_list[caches_list[fd]->pair_fd]->ip_cache.find("#"), 1, ":");
+                        // string toAllCacheMsg = "C#"+caches_list[fd]->ip_cache+caches_list[caches_list[fd]->pair_fd]->ip_cache;
+                        string toAllCacheMsg = "C#" + str1 + "#" + str2;
+                        // 然后把这个msg发给所有的cache====广播
+                        cout << "send msg \'" << toAllCacheMsg << "\' to all cache" << endl;
+                        for (auto fdi : fd_node)
+                        { //将新加入的cache的ip和port发给所有的cache
+                            cout << "the fd is " << fdi << endl;
+                            strcpy(send_buff_disaster, toAllCacheMsg.c_str());
+                            send(fdi, send_buff_disaster, BUF_SIZE, 0);
+                        }
+                        // 本地master的其他配置
                         caches_list[caches_list[fd]->pair_fd]->pair_fd = -1; // 配偶清空
+                        caches_list[caches_list[fd]->pair_fd]->status = 'P'; //备份变主
                         pcache.push(caches_list[fd]->pair_fd);               //待配对状态
-                        auto addr = caches_list.erase(fd);                               //清除caches_list
                         close(fd);
                     }
-                    // 1）如果是主cache_1掉线后，
-                    // 如果cache_1有备份cache_2，则master设置将备份cache_2变为主cache，并且master通知备份cache_2现在是主cache，通知所有cache，将原本存ip_port的数据里，cache_1的位置更新为cache_2的位置
-                    // 如果cache_1没有备份cache，则master通知所有cache，将原本存ip_port的数据里,cache_1的数据删除，并且找到cache_1对应的cache索引index，删除哈希里的对应节点
-                    else if (caches_list[fd]->status == 'P')
-                    { //掉线的是主cache
-                        cout << "the main cache is disaster and the fd is " << fd << ", addr is " << caches_list[fd]->ip_cache << endl;
-                        if (caches_list[fd]->pair_fd > 0)
-                        { //如果有备份cache
-                            cout << "the main cache has backup cache, and the backup cache fd is " << caches_list[fd]->pair_fd << ", addr is " << caches_list[caches_list[fd]->pair_fd]->ip_cache << endl;
-                            // 更改本地fd_node
-                            int index = 0;
-                            for (vector<int>::iterator it = fd_node.begin(); it != fd_node.end();)
-                            {
-                                if (*it == fd)
-                                {
-                                    // it = fd_node.erase(it);
-                                    fd_node[index] = caches_list[fd]->pair_fd; // 把fd更改了
-                                    cout << "change fd_node: " << fd << "->" << caches_list[fd]->pair_fd << endl;
-                                    break;
-                                }
-                                else
-                                {
-                                    ++it;
-                                }
-                                ++index;
-                            }
-                            // =======================================================================================================
-                            // // master通知备份cache_2现在是主cache,并同步所有的ipport
-                            // // cache_2 的fd：caches_list[caches_list[fd]->pair_fd]->pair_fd
-                            // //------------------------------------------------------
-                            // // B#ip1#port1#ip2#port2#...
-                            // //------------------------------------------------------
-                            // string toBackupBacheMsg = "B";
-                            // for(auto fdi : fd_node){
-                            //     toBackupBacheMsg = toBackupBacheMsg + "#" + caches_list[fdi]->ip_cache;
-                            // }
-                            // // cout<<"send msg \'"<< toBackupBacheMsg <<"\' to cache" <<cacheServerAddr <<endl;
-                            // strcpy(send_buff_disaster, toBackupBacheMsg.c_str());
-                            // send(caches_list[caches_list[fd]->pair_fd]->pair_fd, send_buff_disaster, BUF_SIZE, 0);
-                            // =======================================================================================================
-                            // master通知所有cache，将原本存ip_port的数据里，cache_1的位置更新为cache_2的位置
-                            //------------------------------------------------------
-                            // C#origin_ip#origin_port#backup_ip#backup_port
-                            //------------------------------------------------------
-                            //C#origin_ip:origin_port#backup_ip:backup_cache
-                            string str1 = caches_list[fd]->ip_cache.replace(caches_list[fd]->ip_cache.find("#"), 1, ":");
-                            string str2 = caches_list[caches_list[fd]->pair_fd]->ip_cache.replace(caches_list[caches_list[fd]->pair_fd]->ip_cache.find("#"), 1, ":");
-                            // string toAllCacheMsg = "C#"+caches_list[fd]->ip_cache+caches_list[caches_list[fd]->pair_fd]->ip_cache;
-                            string toAllCacheMsg = "C#" + str1 + "#" + str2;
-                            // 然后把这个msg发给所有的cache====广播
-                            cout << "send msg \'" << toAllCacheMsg << "\' to all cache" << endl;
-                            for (auto fdi : fd_node)
-                            { //将新加入的cache的ip和port发给所有的cache
-                                cout << "the fd is " << fdi << endl;
-                                strcpy(send_buff_disaster, toAllCacheMsg.c_str());
-                                send(fdi, send_buff_disaster, BUF_SIZE, 0);
-                            }
-                            // 本地master的其他配置
-                            caches_list[caches_list[fd]->pair_fd]->pair_fd = -1; // 配偶清空
-                            caches_list[caches_list[fd]->pair_fd]->status = 'P'; //备份变主
-                            pcache.push(caches_list[fd]->pair_fd);               //待配对状态
-                            auto addr = caches_list.erase(fd);                               //清除caches_list
-                            close(fd);
-                        }
-                        else
+                    else
+                    {
+                        // 如果cache_1没有备份cache，则
+                        // 更改本地fd_node
+                        cout << "the main cache has not backup cache" << endl;
+                        int index = 0;
+                        vector<int>::iterator it = fd_node.begin();
+                        for (it = fd_node.begin(); it != fd_node.end();)
                         {
-                            // 如果cache_1没有备份cache，则
-                            // 更改本地fd_node
-
-                            cout << "the main cache has not backup cache" << endl;
-                            int index = 0;
-                            // auto it = remove(fd_node.begin(),fd_node.end(),fd);
-                            // fd_node.erase(it, fd_node.end());
-                            for (vector<int>::iterator it = fd_node.begin(); it != fd_node.end();)
+                            if (*it == fd)
                             {
-                                if (*it == fd)
-                                {
-                                    it = fd_node.erase(it); //删除
-                                    cacheAddrHash.deleteNode(index);
-                                    cout << "delete fd " << fd << ", and fd_node size is " << fd_node.size() << endl;
-                                    break;
-                                }
-                                else
-                                {
-                                    ++it;
-                                }
-                                ++index;
+                                it = fd_node.erase(it); //删除
+                                cacheAddrHash.deleteNode(index);
+                                cout << "delete fd " << fd << ", and fd_node size is " << fd_node.size() << endl;
+                                break;
                             }
-                            // for(int i = 0; i < fd_node.size(); ++i){
-                            //     cout<<"--------------"<<endl;
-                            //     cout<<fd_node[i]<<endl;
-                            // }
-                            //master通知所有cache，将原本存ip_port的数据里,cache_1的数据删除，
-                            //------------------------------------------------------
-                            // D#delete_ip#delete_port
-                            //------------------------------------------------------
-                            string toAllCacheDeleteMsg = "D#" + caches_list[fd]->ip_cache;
-                            cout << "send msg \'" << toAllCacheDeleteMsg << "\' to all cache" << endl;
-                            for (auto fdi : fd_node)
+                            else
                             {
-                                cout << "the fd is " << fdi << endl;
-                                strcpy(send_buff_disaster, toAllCacheDeleteMsg.c_str());
-                                send(fdi, send_buff_disaster, BUF_SIZE, 0);
+                                ++it;
                             }
-                            // 本地操作
-
-                            cout << "end erase list" << endl;
-                            auto cache = caches_list.erase(fd); //清除caches_list
-                            cout << "end close fd" << endl;
-                            close(fd);
-                            cout << "end " << endl;
+                            ++index;
                         }
+
+                        //master通知所有cache，将原本存ip_port的数据里,cache_1的数据删除，
+                        //------------------------------------------------------
+                        // D#delete_ip#delete_port
+                        //------------------------------------------------------
+                        string toAllCacheDeleteMsg = "D#" + caches_list[fd]->ip_cache;
+                        cout << "send msg \'" << toAllCacheDeleteMsg << "\' to all cache" << endl;
+                        for (auto fdi : fd_node)
+                        {
+                            // cout << "the fd is " << fdi << endl;
+                            strcpy(send_buff_disaster, toAllCacheDeleteMsg.c_str());
+                            send(fdi, send_buff_disaster, BUF_SIZE, 0);
+                        }
+                        // 本地操作
+                        close(fd);
                     }
                 }
+                
+                break;
             }
-
-            memset(send_buff_disaster, 0, sizeof(send_buff_disaster));
         }
-        sleep(3);
+        if(deletefd>0){
+            caches_list.erase(deletefd);
+        }
+        memset(send_buff_disaster, 0, sizeof(send_buff_disaster));
+        sleep(1);
     }
 }

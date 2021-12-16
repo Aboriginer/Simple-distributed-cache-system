@@ -96,7 +96,7 @@ void ConsistentHash::deleteNode(const int index)
             // key2Index.insert(pair<uint32_t, size_t>(key1, i));
         }
     }
-    cout<<"ConsistentHash"<<this->nodes<<endl;
+    // cout<<"ConsistentHash"<<this->nodes<<endl;
 }
 void ConsistentHash::addNode(const int index)
 {
