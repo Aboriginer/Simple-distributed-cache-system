@@ -31,16 +31,16 @@ Cache::Cache(int cache_size_local, std::string status, std::string local_cache_I
 void Cache::Start() {
     auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
     auto Client_chat_bind = std::bind(&Cache::Client_chat, this);
-   auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
-//    auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
+    auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
+    // auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
 
     std::thread for_master_Heartbeat(Heartbeat_bind);
     std::thread for_client(Client_chat_bind);
-   std::thread for_cache(Cache_pass_bind);
-//    std::thread for_replica(Cache_replica_bind);
+    std::thread for_cache(Cache_pass_bind);
+    // std::thread for_replica(Cache_replica_bind);
 
-//    for_replica.join();
-   for_cache.join();
+    // for_replica.join();
+    for_cache.join();
     for_client.join();
     for_master_Heartbeat.join();
 }
@@ -185,7 +185,7 @@ void Cache::Client_chat() {
                 break;
             }
         }
-        std::cout << "message = " + message << std::endl;
+        // std::cout << "message = " + message << std::endl;
         if (spear == message.size()) {
             //client要求读出值
             std::string key = message;
@@ -249,6 +249,21 @@ void Cache::Client_chat() {
             } else {
                 bzero(recv_buff_client, BUF_SIZE);
                 int len = recv(client_events[i].data.fd, recv_buff_client, BUF_SIZE - 1, 0);
+                
+                // TODO:
+                std::string client_request_status;
+                std::string return_key;
+                char* Delimiter = strchr(recv_buff_client, '#');
+                std::string temp_recv = recv_buff_client;
+                if (Delimiter == NULL) {
+                    client_request_status = "Read key:";
+                    return_key = recv_buff_client;
+                }else {
+                    client_request_status = "Write key:";
+                    return_key = temp_recv.substr(0, Delimiter - recv_buff_client);
+                }
+
+
                 if (len == 0) {
                     epoll_ctl(epfd, EPOLL_CTL_DEL, client_events[i].data.fd, NULL);
                     close(client_events[i].data.fd);
@@ -263,7 +278,14 @@ void Cache::Client_chat() {
                     memcpy(send_buff_client, buffer.c_str(), buffer.size());
                     //向端口传出数据：SUCCESS/FAILED#key#ip:port(cache server)
                     send(client_events[targetPort].data.fd, send_buff_client, BUF_SIZE, 0);
-                    std::cout << "========================================return value:" << send_buff_client << std::endl;
+
+                    // TODO:
+                    std::string return_status;
+                    if (buffer[0] == 'S') return_status = ",SUCCESS";
+                    else return_status = ",FAILED";
+
+                    // std::cout << "========================================return value:" << send_buff_client << std::endl;
+                    std::cout << client_request_status + return_key + return_status << std::endl;
 
                     //这里用一把锁来管理Replica的缓冲区。
                     // TODO : 记得在Replica那边也要试图访问这个锁
@@ -352,6 +374,7 @@ void Cache::ReadFromMaster(std::string message) {
         dying_cache_IP_ = part(message, spear, 1);
         dying_cache_Port = part(message, spear, 2);
         
+        // TODO：这里感觉应该更新完cache_list再把状态改为K
         if(dying_cache_IP_ == local_cache_IP_ && dying_cache_Port == port_for_cache_){
             status_ = "K";
         }
@@ -436,9 +459,10 @@ void Cache::cache_pass(){
             return;
         }
         int size = otherIP.size();
+        std::cout << "Start cal_hash_key, cache_list size:" << cache_list.size() << std::endl;
         //计算目标地址
-        // cal_hash_key();
-        out_key.push_back("123");
+        cal_hash_key();
+        // out_key.push_back("123");
         //传递数据
         for(int i = 0; i < otherIP.size(); i++){
             std::cout<<"handling cache = "<<i<<std::endl;
@@ -454,6 +478,7 @@ void Cache::cache_pass(){
         from_single_cache(local_cache_IP_, port_for_cache_);
         cache_list_update_flag = true;
         std::cout<<"cache_list_update_flag == "<< (cache_list_update_flag ? "true" : "false") <<std::endl;
+        // TODO：为啥这里要sleep
         sleep(4);
     }else if(status_ == "R"){
         from_single_cache(local_cache_IP_, port_for_cache_);
@@ -504,7 +529,6 @@ void Cache::replica_chat() {
     while (true) {
         // TODO:接收Master心跳包时要更新pr_status_
         if (pr_status_ == "P") {   // 本地cache是主cache，作为服务器端
-            target_port_ = "hhhh";  // TODO:为测试replica_chat, 需删除
             if (target_port_ != "None") {    // 确定备份cache已上线
 
                 int clnt_sock;
@@ -518,15 +542,16 @@ void Cache::replica_chat() {
                 std::string send_message;
                 char send_buff_replica[BUF_SIZE];
                 while (true) {
-                    cache_list_update_flag = true;  // 用于测试
-                    kv_update_flag = true;  // 用于测试
+                    // cache_list_update_flag = true;  // 用于测试
+                    // kv_update_flag = true;  // 用于测试
                     if (cache_list_update_flag) {   // cache_list有更新
                         std::cout << "Need to write cache_list" << std::endl;
                         send_message.clear();
                         bzero(send_buff_replica, BUF_SIZE);
-                        // TODO:写入更新的cache_list
+                        // 写入更新的cache_list
                         send_message = "#"; // 第一个字符是'#', 则表示收到的是cache_list
                         //现在开始传输哈希表
+                        // TODO:cache_list是不是需要加锁
                         for(auto it : cache_list){
                             send_message += it.first + "#" +it.second;
                         }
@@ -550,7 +575,7 @@ void Cache::replica_chat() {
                         std::cout << "Send message:" << send_buff_replica << std::endl;
                         kv_update_flag = false; // 成功写入cache_list
                     }
-                    sleep(3);   // TODO:测试用，需删除
+                    // sleep(3);   // TODO:测试用，需删除
                 }
                 close(clnt_sock);
             }
@@ -558,21 +583,21 @@ void Cache::replica_chat() {
 
             std::string recv_message;
             char recv_buff_primary[BUF_SIZE];
-            // TODO:这里只是为了测试，后面需删除
-            target_IP_ = "127.0.0.1";
-            target_port_ = "8888";
             std::cout << "Server connection from:";
             int clnt_sock = client_socket(target_IP_, target_port_);
             while (true) {
-                if (pr_status_ != "R") break;  // 备份cache转正
+                if (pr_status_ != "R") {
+                    std::cout << "Disaster recovery starts, Replica cache =====> Primary cache successfully" << std::endl;
+                    break;  // 备份cache转正
+                }
                 recv_message.clear();
                 bzero(recv_buff_primary, BUF_SIZE);
                 int len = recv(clnt_sock, recv_buff_primary, BUF_SIZE, 0);
                 recv_message = std::string(recv_buff_primary);
                 std::cout << "Receive from primary cache:" << recv_message << std::endl;
-                // TODO:解析收到的recv_message，写入备份的LRU中
+                // 解析收到的recv_message，写入备份的LRU中
                 if (recv_message[0] == '#') {   // 收到更新的cache_list
-                    //上锁。防止主cache提前推出。
+                    //上锁，防止主cache提前推出。
                     end_mutex.lock();
                     std::cout << "Receive cache_list" << std::endl;
                     std::vector<std::string> ip, port;
@@ -601,6 +626,7 @@ void Cache::replica_chat() {
                     }
                     //解锁。
                     end_mutex.unlock();
+                    // TODO：这里要是有问题可以直接到ReadFromMaster中下线备份cache
                     // 主cache缩容后，备份cache下线
                     std::pair<std::string, std::string> local_pair = {target_IP_, target_port_};
                     auto equal = [&local_pair](std::pair<std::string, std::string> &a){
