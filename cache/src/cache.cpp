@@ -74,7 +74,7 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
     vector<std::string> ip, port;
     std::string tmp;
     std::cout<<"receving initial message from master."<<std::endl;
-    std::cout << "========================receving ip#port:" << recv_buff_initial << std::endl;
+    // std::cout << "========================receving ip#port:" << recv_buff_initial << std::endl;
     for(int i = 0; i < strlen(recv_buff_initial); i++){
         char single = recv_buff_initial[i];
         if(single != '#'){
@@ -94,14 +94,21 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
         return;
     }
 
-    std::cout<<"writing ip & port to hashmap ."<<std::endl;
-    std::cout<<"ip           port             "<<std::endl;
+
+    // std::cout<<"writing ip & port to hashmap ."<<std::endl;
+    // std::cout<<"ip           port             "<<std::endl;
     for(int i = 0; i < ip.size(); i++){
-        std::cout<<ip[i]<<" "<<port[i]<<std::endl;
+        // std::cout<<ip[i]<<" "<<port[i]<<std::endl;
         pair <std::string , std::string> pair (ip[i], port[i]);
         cache_list.emplace_back(pair);
     }
     std::cout<<"write successful."<<std::endl;
+    std::cout << "Number of online cache:" << cache_list.size() << std::endl;
+    std::cout << "Online cache list:" << std::endl;
+    for (int i = 0; i < cache_list.size(); i ++ ) {
+        cout << "cache" << i + 1 << " ip:" << cache_list[i].first << ", " << "cache" << i + 1 << " port:" << cache_list[i].second << std::endl;
+    }
+    std::cout << "==================" << std::endl;
     is_initialed = SUCCESS_INIT;
 }
 
@@ -115,12 +122,11 @@ void Cache::Heartbeat() {
 
         static int cache_master_sock = client_socket(MASTER_IP, master_port);
 
-        // std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + pr_status_;
         std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + port_for_cache_ + "#" + pr_status_;
         strcpy(send_buff_master, heart_message.data());
-        std::cout << "Send message:" << send_buff_master << std::endl;
+        // std::cout << "Send message:" << send_buff_master << std::endl;
         send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
-        std::cout << "Heartbeat successfully!" << std::endl;
+        // std::cout << "Heartbeat successfully!" << std::endl;
         bzero(send_buff_master, BUF_SIZE);
         bzero(recv_buff_master, BUF_SIZE);
 
@@ -129,11 +135,14 @@ void Cache::Heartbeat() {
         // 设置为非阻塞模式接收信息
         int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
         // TODO:测试用，待删除
-        std::cout << "================len:" << len << std::endl;
-        std::cout << "recv:" << recv_buff_master << std::endl;
-        std::cout << "=====================i:" << i << std::endl;
-        if (len != 0 && initial_flag)   ReadFromMaster(recv_buff_master);
-        std::cout << "===================== second i:" << i << std::endl;
+        // std::cout << "================len:" << len << std::endl;
+        // std::cout << "recv:" << recv_buff_master << std::endl;
+        // std::cout << "=====================i:" << i << std::endl;
+        if (len != 0 && initial_flag) {
+            if (recv_buff_master[0] != 'P') std::cout << "Receive from master:" <<  recv_buff_master << std::endl;
+            ReadFromMaster(recv_buff_master);
+        }
+        // std::cout << "===================== second i:" << i << std::endl;
         while (!initial_flag && len > 0) {
             initial(cache_master_sock, recv_buff_master);
             if(is_initialed == NO_INIT){
@@ -145,8 +154,8 @@ void Cache::Heartbeat() {
             }
             initial_flag = true;
         }
-        std::cout << "===================== last i:" << i << std::endl;
-        std::cout << ">>>>>>>>>>>>>>>>>>>>>>>cache_list size:" << cache_list.size() << std::endl; 
+        // std::cout << "===================== last i:" << i << std::endl;
+        // std::cout << ">>>>>>>>>>>>>>>>>>>>>>>cache_list size:" << cache_list.size() << std::endl; 
     });
     timer->start();
 }
@@ -337,7 +346,7 @@ void Cache::ReadFromMaster(std::string message) {
         else if(part_num == 2)return str.substr(spear + 1, str.size() - spear -1);
     };
     std::string head = message.substr(0,1);   //P或者R
-    std::cout << "====================ReadFromMaster i:" << i << std::endl;
+    // std::cout << "====================ReadFromMaster i:" << i << std::endl;
     std::lock_guard<std::mutex> guard(status_mutex);
     if(head == "K"){
         dying_cache_IP_ = part(message, spear, 1);
@@ -350,7 +359,6 @@ void Cache::ReadFromMaster(std::string message) {
     }else if(head == "N"){
         std::string neo_cache_IP = part(message, spear, 1);
         std::string neo_cache_Port = part(message, spear, 2);
-        // TODO:感觉初始化后的N，还是需要unique
         update_cache(neo_cache_IP, neo_cache_Port, "N");
     }else if(head =="P"){
         status_ = head;
@@ -408,7 +416,7 @@ void Cache::ReadFromMaster(std::string message) {
         auto it  = find_if(cache_list.begin(), cache_list.end(), equal);
         cache_list.erase(it);
     }
-    std::cout << "====================ReadFromMaster after i:" << i << std::endl;
+    // std::cout << "====================ReadFromMaster after i:" << i << std::endl;
 }
 
 //扩缩容函数
@@ -461,9 +469,15 @@ void Cache::update_cache(std::string &IP, std::string &port,std::string status){
         if (IP != local_cache_IP_ || port != port_for_cache_) {
             pair <std::string , std::string> pair (IP, port);
             cache_list.emplace_back(pair);
-        }
-        // pair <std::string , std::string> pair (IP, port);
-        // cache_list.emplace_back(pair);
+            std::cout << "Add new cache, cache ip:" << IP << " cache port:" << port << std::endl;
+            std::cout << "Number of online cache:" << cache_list.size() << std::endl;
+            std::cout << "Online cache list:" << std::endl;
+            for (int i = 0; i < cache_list.size(); i ++ ) {
+                cout << "cache" << i + 1 << " ip:" << cache_list[i].first << ", " << "cache" << i + 1 << " port:" << cache_list[i].second << std::endl;
+            }
+            std::cout << "==================" << std::endl;
+        }    
+
     }else if(status == "K"){
         dying_cache_IP_ = IP;
         dying_cache_Port = port;
@@ -473,6 +487,13 @@ void Cache::update_cache(std::string &IP, std::string &port,std::string status){
         };
         auto it  = find_if(cache_list.begin(), cache_list.end(), equal);
         cache_list.erase(it);
+        std::cout << "Shrink a cache, cache ip:" << IP << " cache port:" << port << std::endl;
+        std::cout << "Number of online cache:" << cache_list.size() << std::endl;
+        std::cout << "Online cache list:" << std::endl;
+        for (int i = 0; i < cache_list.size(); i ++ ) {
+            cout << "cache" << i + 1 << " ip:" << cache_list[i].first << ", " << "cache" << i + 1 << " port:" << cache_list[i].second << std::endl;
+        }
+        std::cout << "==================" << std::endl;
     }
     cache_list_update_flag = true;
 }
