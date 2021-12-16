@@ -29,3 +29,11 @@ cached端待测试：
 
 
 # 目前测试遇到的bug
+
+1.cache init后会把自己再加到cache_list中，需要unique
+
+解决：目前已在update_cache中判断IP和port是否为本机，是的话不加入cache_list
+
+2.cache启动多个主cache的时候有的时候会卡住（只开心跳和Cient_chat函数）
+
+<img src="C:/Users/Aboriginer/AppData/Roaming/Typora/typora-user-images/image-20211216112023934.png" alt="image-20211216112023934" style="zoom:50%;" />
