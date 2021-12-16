@@ -337,6 +337,10 @@ void Master::shrinkageCapacity(){
                 strcpy(send_buff_shink, shrinkmsg.c_str());
                 send(fdi, send_buff_shink, BUF_SIZE, 0);
             }
+            if(clients_list[fd]->pair_fd>0){//如果有备份cache
+                auto addr1 = clients_list.erase(clients_list[fd]->pair_fd);// 删除缩容的配偶cache
+                close(clients_list[fd]->pair_fd);//关闭配偶的cache通信
+            }
             fd_node.pop_back();
             auto addr = clients_list.erase(fd);                         //删除主cache
             close(fd);                                //关闭主socket
@@ -345,10 +349,7 @@ void Master::shrinkageCapacity(){
             // 2 缩容里主备分部分需要做的内容
             // auto addr = clients_list.erase(clients_list[fd]->pair_fd);  //删除备份cache
             // close(clients_list[fd]->pair_fd);         //关闭备份socket
-            if(clients_list[fd]->pair_fd>0){//如果有备份cache
-                auto addr1 = clients_list.erase(clients_list[fd]->pair_fd);// 删除缩容的配偶cache
-                close(clients_list[fd]->pair_fd);//关闭配偶的cache通信
-            }
+            // cout<<
         }
         else if(c=='c'){
             for(auto cache : clients_list){
