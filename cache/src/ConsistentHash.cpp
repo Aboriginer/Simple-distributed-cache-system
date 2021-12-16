@@ -30,6 +30,8 @@ uint32_t ConsistentHash::murmur3_32(string s, int len){
 }
 void ConsistentHash::initialize(int _nodes, int _v_nodes)
 {
+    this->nodes = _nodes;
+    this->v_nodes = _v_nodes;
     for(int i = 0; i < _nodes; ++i) //i:ip
     {
         for(int j = 0; j < _v_nodes; ++j) 
