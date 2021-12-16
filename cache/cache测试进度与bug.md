@@ -30,7 +30,7 @@ cached端待测试：
 
 # 目前测试遇到的bug
 
-1.cache init后会把自己再加到cache_list中，需要unique
+~~1.cache init后会把自己再加到cache_list中，需要unique~~
 
 解决：目前已在update_cache中判断IP和port是否为本机，是的话不加入cache_list
 
