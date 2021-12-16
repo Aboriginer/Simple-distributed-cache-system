@@ -24,23 +24,21 @@ Cache::Cache(int cache_size_local, std::string status, std::string local_cache_I
     cache_list_update_flag = false;
     kv_update_flag = false;
     is_initialed = 0;
-    initial_flag = false;
-    if (pr_status_ == "R") initial_flag = true;
 }
 
 void Cache::Start() {
     auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
     auto Client_chat_bind = std::bind(&Cache::Client_chat, this);
-//    auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
-//    auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
+   auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
+   auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
 
     std::thread for_master_Heartbeat(Heartbeat_bind);
     std::thread for_client(Client_chat_bind);
-//    std::thread for_cache(Cache_pass_bind);
-//    std::thread for_replica(Cache_replica_bind);
+   std::thread for_cache(Cache_pass_bind);
+   std::thread for_replica(Cache_replica_bind);
 
-//    for_replica.join();
-//    for_cache.join();
+   for_replica.join();
+   for_cache.join();
     for_client.join();
     for_master_Heartbeat.join();
 }
@@ -50,14 +48,13 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
     //cache将一直监听，直到master向cache传递初始化数据位置。
 
     auto is_not_init = [](char* message)->bool{
-        if(strlen(message)) return false;
+        if(strlen(message) == 0) return false;
         else if(!(message[0] >= '0' && message[0] <= '0')){
             return false;
         }else{
             return true;
         }
     };
-
     while(is_not_init(recv_buff_initial)){
         bzero(recv_buff_initial, BUF_SIZE);
         recv(cache_master_sock, recv_buff_initial, BUF_SIZE, 0);
@@ -110,42 +107,44 @@ void Cache::Heartbeat() {
     static auto timer = std::make_shared<Timer> (1000, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
     timer->setCallback([this](void * pdata){
 
+
+
+        bool initial_flag = false;
         char send_buff_master[BUF_SIZE], recv_buff_master[BUF_SIZE];
         std::string master_port = std::to_string(MASTER_PORT);
 
         static int cache_master_sock = client_socket(MASTER_IP, master_port);
 
-        // std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + pr_status_;
-        std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + port_for_cache_ + "#" + pr_status_;
-        strcpy(send_buff_master, heart_message.data());
-        std::cout << "Send message:" << send_buff_master << std::endl;
-        send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
-        std::cout << "Heartbeat successfully!" << std::endl;
-        bzero(send_buff_master, BUF_SIZE);
-        bzero(recv_buff_master, BUF_SIZE);
+//        while (true) {
+            std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + pr_status_;
+//            std::string heart_message = "x#" + local_cache_IP_ + "#" + port_for_client_ + "#" + port_for_cache_ + "#" + pr_status_;
+            strcpy(send_buff_master, heart_message.data());
+            std::cout << "Send message:" << send_buff_master << std::endl;
+            send(cache_master_sock, send_buff_master, BUF_SIZE, 0);
+            std::cout << "Heartbeat successfully!" << std::endl;
+            bzero(send_buff_master, BUF_SIZE);
+            bzero(recv_buff_master, BUF_SIZE);
 
-        i ++;
+//        // TODO:显示IP和port不一一配对，原因是master先发送的是扩容信息N，应该是向新增cache先发送cache list
+//        while (!initial_flag) {
+//            initial(cache_master_sock, recv_buff_master);
+//            if(is_initialed == NO_INIT){
+//                std::cout<<"ERROR: the cache is not initiated. "<<std::endl;
+//                exit(EXIT_FAILURE);
+//            }else if(is_initialed == ERROR_INIT){
+//                std::cout<<"ERROR: something wrong when initiating the cache."<<std::endl;
+//                exit(EXIT_FAILURE);
+//            }
+//            initial_flag = true;
+//        }
+//
         bzero(recv_buff_master, BUF_SIZE);
         // 设置为非阻塞模式接收信息
         int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
-        // TODO:测试用，待删除
-        std::cout << "================len:" << len << std::endl;
-        std::cout << "recv:" << recv_buff_master << std::endl;
-        std::cout << "=====================i:" << i << std::endl;
-        if (len != 0 && initial_flag)   ReadFromMaster(recv_buff_master);
-        std::cout << "===================== second i:" << i << std::endl;
-        while (!initial_flag && len > 0) {
-            initial(cache_master_sock, recv_buff_master);
-            if(is_initialed == NO_INIT){
-                std::cout<<"ERROR: the cache is not initiated. "<<std::endl;
-                exit(EXIT_FAILURE);
-            }else if(is_initialed == ERROR_INIT){
-                std::cout<<"ERROR: something wrong when initiating the cache."<<std::endl;
-                exit(EXIT_FAILURE);
-            }
-            initial_flag = true;
-        }
-        std::cout << "===================== last i:" << i << std::endl;
+        if (len != 0)   ReadFromMaster(recv_buff_master);
+
+//        sleep(3);
+//        }
     });
     timer->start();
 }
@@ -327,7 +326,7 @@ void Cache::from_single_cache(std::string &ip, std::string &port){
 
 void Cache::ReadFromMaster(std::string message) {
     int spear = 2;
-    while (message.size() && spear != message.size() && message[spear] != '#') {
+    while (spear != message.size() && message[spear] != '#') {
         spear++;
     }
 
@@ -336,7 +335,6 @@ void Cache::ReadFromMaster(std::string message) {
         else if(part_num == 2)return str.substr(spear + 1, str.size() - spear -1);
     };
     std::string head = message.substr(0,1);   //P或者R
-    std::cout << "====================ReadFromMaster i:" << i << std::endl;
     std::lock_guard<std::mutex> guard(status_mutex);
     if(head == "K"){
         dying_cache_IP_ = part(message, spear, 1);
@@ -349,27 +347,16 @@ void Cache::ReadFromMaster(std::string message) {
     }else if(head == "N"){
         std::string neo_cache_IP = part(message, spear, 1);
         std::string neo_cache_Port = part(message, spear, 2);
-        // TODO:感觉初始化后的N，还是需要unique
         update_cache(neo_cache_IP, neo_cache_Port, "N");
     }else if(head =="P"){
         status_ = head;
         pr_status_ = "P";   // 用于备份转正
-        if(message.substr(2, message.size() - 2) == "None"){
-            target_IP_ = "None";
-            target_port_ = "None";
-        }else {
-            target_IP_  = part(message, spear, 1);
-            target_port_ = part(message, spear, 2);
-        }
+        target_IP_  = part(message, spear, 1);
+        target_port_ = part(message, spear, 2);
     }else if(head == "R"){
         status_ = head;
-        if(message.substr(2, message.size() - 2) == "None"){
-            target_IP_ = "None";
-            target_port_ = "None";
-        }else {
-            target_IP_  = part(message, spear, 1);
-            target_port_ = part(message, spear, 2);
-        }
+        target_IP_  = part(message, spear, 1);
+        target_port_ = part(message, spear, 2);
     }else if(head == "C"){
         std::string origin_ = part(message, spear, 1);
         std::string backup_ = part(message, spear, 2);
@@ -407,7 +394,6 @@ void Cache::ReadFromMaster(std::string message) {
         auto it  = find_if(cache_list.begin(), cache_list.end(), equal);
         cache_list.erase(it);
     }
-    std::cout << "====================ReadFromMaster after i:" << i << std::endl;
 }
 
 //扩缩容函数
@@ -620,7 +606,7 @@ void Cache::cal_hash_key() {
         std::string single = it.first + it.second;
         caches.push_back(single);
     }
-
+    // unique(caches.begin(), caches.end());
     cache_hash.initialize(caches.size(), 100);
     std::vector<std::string> all_keys = MainCache.all_key();
 
@@ -731,3 +717,4 @@ void addfd(int epollfd, int fd, bool enable_et) {
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFD, 0) | O_NONBLOCK);
     printf("fd added to epoll!\n\n");
 }
+

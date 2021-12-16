@@ -1,8 +1,7 @@
 #include "master.h" 
 using namespace std;
 
-// unordered_map<string , uint32_t> keyCacheMap;
-// unordered_map<string, time_t> cacheAddrMap;
+
 Master::Master() {}
 
 void Master::start_client() {
@@ -88,15 +87,9 @@ void Master::start_client() {
             else {
                 bzero(recv_buff_client, BUF_SIZE);
                 recv(client_events[i].data.fd, recv_buff_client, BUF_SIZE, 0);
-
-                //===========================================================
                 string recv_buff_str = recv_buff_client;
                 string cacheServerAddr = handleClientMessage(recv_buff_str);
                 string send_to_client = "MASTER#" + recv_buff_str + "#" + cacheServerAddr;
-                // char cacheServerAddrChar[BUF_SIZE];
-                // sprintf(cacheServerAddrChar, "%d", cacheServerAddr);
-                // // cout<<"hikh"<<endl;
-                //===========================================================
                 strcpy(send_buff_client, send_to_client.c_str());  //CacheSever IP
                 send(client_events[i].data.fd, send_buff_client, BUF_SIZE, 0);
 
@@ -115,11 +108,6 @@ void Master::start_cache() {
 
     int cache_sock;
     int cache_listener = 0;
-
-    // // 主cache堆栈
-    // stack<int> pcache;
-    // // 备用cache堆栈
-    // stack<int> rcache;
 
     struct sockaddr_in cache_addr;
     bzero(&cache_addr, sizeof(cache_addr));
@@ -190,9 +178,6 @@ void Master::start_cache() {
                 //#################################################1/3
                 // 服务端用map保存用户连接，fd对应客户端套接字地址
                 struct fdmap *tmp = new fdmap(clientfd);
-                // tmp->ip_port = 
-                // fd_node.push_back(clientfd);//位置不对
-                // 还有主备份问题要改
                 clients_list[clientfd] = tmp;
                 //#################################################
                 std::cout << "Add new clientfd = " << clientfd << " to epoll" << std::endl;
@@ -215,15 +200,9 @@ void Master::start_cache() {
                     struct fdmap *it = clients_list[client_events[i].data.fd];
                     //————————————————————————————————-————--————————————————————————————————————————————
                     std::cout << "get heartbeat from cache server:" << recv_buff_client << std::endl; 
-                    //————————————————————————————————-————--————————————————————————————————————————————
-                    //################################################# 2/3
                     string recv_buff_str = recv_buff_client;
-                    // cout<<"recv_buff_str"<<recv_buff_str<<endl;
                     vector<string> vtmsg = split(recv_buff_str, "#");
-                    // 陌生人自报家门
-                    // cout<<"client_events[i].data.fd"<<client_events[i].data.fd<<endl;
-                    // cout<<"client_list.size"<<clients_list.size()<<endl;
-                    if (clients_list[client_events[i].data.fd]->ip_port == "0") {
+                    if (clients_list[client_events[i].data.fd]->ip_port == "0") {   //第一次接受心跳
                         cout<<"clients_list[client_events[i].data.fd]->ip_port" << clients_list[client_events[i].data.fd]->ip_port << endl;
                         string socli = vtmsg[1]+"#"+vtmsg[2];
                         string socac = vtmsg[1]+"#"+vtmsg[3];
@@ -304,10 +283,6 @@ void Master::start_cache() {
                     handleHeartBeatResponse(recv_buff_client);
                     //#################################################
                 }
-                // else if (pch == 'g') {  // 更新请求："g#ip#port#key"
-                //     std::cout << "update KeyCacheMap By CacheReq:" << recv_buff_client << std::endl;
-                //     updateKeyCacheMapByCacheReq(recv_buff_client);
-                // }
             }
         }
     }
@@ -354,13 +329,12 @@ void Master::shrinkageCapacity(){
             for(auto fdi : fd_node){
                 strcpy(send_buff_shink, shrinkmsg.c_str());
                 send(fdi, send_buff_shink, BUF_SIZE, 0);
-                // cout<<fdi<<endl;
             }
             fd_node.pop_back();
             auto addr = clients_list.erase(fd);                         //删除主cache
             close(fd);                                //关闭主socket
             // 这里有两个问题：
-            // 1 删除的信息可能没有同步到其他线程——>我不会 T T [所以我让收心跳包那里就直接continue了]
+            // 1 删除的信息可能没有同步到其他线程——>需要测试
             // 2 缩容里主备分部分需要做的内容
             // auto addr = clients_list.erase(clients_list[fd]->pair_fd);  //删除备份cache
             // close(clients_list[fd]->pair_fd);         //关闭备份socket
@@ -394,14 +368,8 @@ string Master::handleClientMessage(string msg){
 //################################################################################3/3
 void Master::handleHeartBeatResponse(string msg) {
     // 心跳检测包处理
-    //————————————————————————————————-————--——————————————————————————————
-    //cout << "handle heartbeat message" << endl;
-    //————————————————————————————————-————--——————————————————————————————
     time_t timeNow;
     time(&timeNow);
-    //————————————————————————————————-————--——————————————————————————————
-    //cout << "the time is: "<< timeNow<<endl;
-    //————————————————————————————————-————--——————————————————————————————
     // "x#ip#port"，其中ip:port是cache_server的套接字地址    
     vector<string> vtmsg = split(msg, "#");
     if(vtmsg.size()<4){
@@ -409,111 +377,26 @@ void Master::handleHeartBeatResponse(string msg) {
     }
     string cacheAddr = vtmsg[1]+"#"+vtmsg[2];
     cacheAddrMap[cacheAddr] = timeNow;
-
-    //TODO：更新时间戳
-/* 
-    vector<string> vtmsg = split(msg, "#");
-    string cacheServerAddrStr = vtmsg[1];
-    string cacheServerPortStr = vtmsg[2];
-    string cacheServerTimeFlgStr = vtmsg[3];
-    cout << "insert cache-time map with addr is " << cacheServerAddrStr << " and time is " << cacheServerTimeFlgStr << endl; */
 }
 //################################################################################
 
 bool Master::heartBeatDetect(int fd) {
     string cacheServerAddr = clients_list[fd]->ip_port;
     // 对cache server判断是否存活
-    // cout << "judge the cache " << cacheServerAddr<<" is or not activate" << endl;
     time_t timeNow;
     time(&timeNow);
-    //————————————————————————————————-————--——————————————————————————————
-    //cout<<"the diff: "<<timeNow - cacheAddrMap[cacheServerAddr]<<endl;  ｜
-    //————————————————————————————————-————--——————————————————————————————
     if (timeNow - cacheAddrMap[cacheServerAddr] < heartBeatInterval) {
-    //————————————————————————————————-————--——————————————————————————————
-    //   cout << "the cache " << cacheServerAddr << " is activate" << endl;
-    //————————————————————————————————-————--——————————————————————————————
         return true;
     }
-    // return furtherHeartBeatDetect(cacheServerAddr);
-    //————————————————————————————————-————--——————————————————————————————
-    //cout << "the cache " << cacheServerAddr << " is not activate" << endl;
-    //————————————————————————————————-————--——————————————————————————————
     return false;
 }
-
-//========================================================================================
-// void Master::periodicDetectCache(){
-//     while(true){
-//         //————————————————————————————————-————--
-//         //cout<< "periodicDetectCache"<<endl;   ｜
-//         //————————————————————————————————-————--
-//         // 周期性更新本地的cache时间戳的表
-//         for(auto cacheAddr : cacheAddrMap){
-//             time_t timeNow;
-//             time(&timeNow);
-//             if(heartBeatDetect(cacheAddr.first)){
-
-//                 continue;
-//             } else{
-//                 // updateKeyCacheMapByHeartBeat(cacheAddr.first);
-//                 // // 这里应该做类似缩容的事情——>删除哈希节点——>但是如何获取index？
-//                 // index = ？
-//                 // cacheAddrHash.deleteNode(index);
-//             }
-//         }
-//         sleep(3);
-//     }
-// }
-
-
-// void Master::periodicDetectCache(){
-//     while(true){
-//         //————————————————————————————————-————--
-//         //cout<< "periodicDetectCache"<<endl;   ｜
-//         //————————————————————————————————-————--
-//         // 周期性更新本地的cache时间戳的表
-//         for(auto fd : fd_node){
-//             time_t timeNow;
-//             time(&timeNow);
-//             if(heartBeatDetect(fd)){   //存活
-
-//                 continue;
-//             } 
-//             else{     //不存活
-//                 if (clients_list[fd]->status == 'R') { //掉线的是备份cache
-//                     clients_list[clients_list[fd]->pair_fd]->pair_fd = -1;  // 配偶清空
-//                     pcache.push(clients_list[fd]->pair_fd);  //待配对状态
-//                     clients_list.erase(fd);//清除clients_list
-//                     close(fd);
-//                 }
-//                 else if (clients_list[fd]->status == 'P')  { //掉线的是主cache
-//                     clients_list[clients_list[fd]->pair_fd]->pair_fd = -1;  // 配偶清空
-//                     clients_list[clients_list[fd]->pair_fd]->status = 'P';  //备份变主
-//                     pcache.push(clients_list[fd]->pair_fd);  //待配对状态
-//                     clients_list.erase(fd);//清除clients_list
-//                     //TODO  更改fd_node.
-//                     //TODO  广播通知备份变主
-//                     close(fd);
-//                 }
-//                 }
-//         }
-//         sleep(3);
-//     }
-// }
-
-//===================================
-// 下面这里我一点都没测，所以如果你要做别的然后这里还有问题，你可以先用上面的，上面的是原来的
-// 没有测是指可能运行有bug
 
 void Master::periodicDetectCache(){
     char send_buff_disaster[BUF_SIZE];
     while(true){
-        //————————————————————————————————-————--
-        //cout<< "periodicDetectCache"<<endl;   ｜
-        //————————————————————————————————-————--
         // 周期性更新本地的cache时间戳的表
-        for(auto fd : fd_node){
+        for(auto it : clients_list){
+            int fd = it.second->fd;
             time_t timeNow;
             time(&timeNow);
             if(heartBeatDetect(fd)){   //存活
@@ -534,13 +417,6 @@ void Master::periodicDetectCache(){
 // 如果cache_1有备份cache_2，则master设置将备份cache_2变为主cache，并且master通知备份cache_2现在是主cache，通知所有cache，将原本存ip_port的数据里，cache_1的位置更新为cache_2的位置
 // 如果cache_1没有备份cache，则master通知所有cache，将原本存ip_port的数据里,cache_1的数据删除，并且找到cache_1对应的cache索引index，删除哈希里的对应节点
                 else if (clients_list[fd]->status == 'P')  { //掉线的是主cache
-                    // clients_list[clients_list[fd]->pair_fd]->pair_fd = -1;  // 配偶清空
-                    // clients_list[clients_list[fd]->pair_fd]->status = 'P';  //备份变主
-                    // pcache.push(clients_list[fd]->pair_fd);  //待配对状态
-                    // clients_list.erase(fd);//清除clients_list
-                    //======================================================================================
-                    // 这里是我后加的，但是没测，如果有问题你先注释掉这里
-                    //TODO  更改fd_node.
                     if(clients_list[fd]->pair_fd>0){//如果有备份cache
                         // 更改本地fd_node
                         int index = 0;
@@ -555,23 +431,29 @@ void Master::periodicDetectCache(){
                             }
                             ++index;
                         }
-                        // master通知备份cache_2现在是主cache,并同步所有的ipport
-                        // cache_2 的fd：clients_list[clients_list[fd]->pair_fd]->pair_fd
-                        //------------------------------------------------------
-                        // B#ip1#port1#ip2#port2#...
-                        //------------------------------------------------------
-                        string toBackupBacheMsg = "B";
-                        for(auto fdi : fd_node){
-                            toBackupBacheMsg = toBackupBacheMsg + "#" + clients_list[fdi]->ip_cache;
-                        }
-                        // cout<<"send msg \'"<< toBackupBacheMsg <<"\' to cache" <<cacheServerAddr <<endl;
-                        strcpy(send_buff_disaster, toBackupBacheMsg.c_str());
-                        send(clients_list[clients_list[fd]->pair_fd]->pair_fd, send_buff_disaster, BUF_SIZE, 0);
+                        // =======================================================================================================
+                        // // master通知备份cache_2现在是主cache,并同步所有的ipport
+                        // // cache_2 的fd：clients_list[clients_list[fd]->pair_fd]->pair_fd
+                        // //------------------------------------------------------
+                        // // B#ip1#port1#ip2#port2#...
+                        // //------------------------------------------------------
+                        // string toBackupBacheMsg = "B";
+                        // for(auto fdi : fd_node){
+                        //     toBackupBacheMsg = toBackupBacheMsg + "#" + clients_list[fdi]->ip_cache;
+                        // }
+                        // // cout<<"send msg \'"<< toBackupBacheMsg <<"\' to cache" <<cacheServerAddr <<endl;
+                        // strcpy(send_buff_disaster, toBackupBacheMsg.c_str());
+                        // send(clients_list[clients_list[fd]->pair_fd]->pair_fd, send_buff_disaster, BUF_SIZE, 0);
+                        // =======================================================================================================
                         // master通知所有cache，将原本存ip_port的数据里，cache_1的位置更新为cache_2的位置
                         //------------------------------------------------------
                         // C#origin_ip#origin_port#backup_ip#backup_port
                         //------------------------------------------------------
-                        string toAllCacheMsg = "C#"+clients_list[fd]->ip_cache+clients_list[clients_list[fd]->pair_fd]->ip_cache;
+                        //C#origin_ip:origin_port#backup_ip:backup_cache
+                        string str1 = clients_list[fd]->ip_cache.replace(clients_list[fd]->ip_cache.find("#"), 1, ":");
+                        string str2 = clients_list[clients_list[fd]->pair_fd]->ip_cache.replace(clients_list[clients_list[fd]->pair_fd]->ip_cache.find("#"), 1, ":");
+                        // string toAllCacheMsg = "C#"+clients_list[fd]->ip_cache+clients_list[clients_list[fd]->pair_fd]->ip_cache;
+                        string toAllCacheMsg = "C#" + str1 + "#" + str2;
                         // 然后把这个msg发给所有的cache====广播
                         cout<<"send msg \'"<< toAllCacheMsg <<"\' to all cache"<<endl; 
                         for(auto fdi : fd_node){//将新加入的cache的ip和port发给所有的cache
@@ -617,36 +499,9 @@ void Master::periodicDetectCache(){
                         close(fd);
 
                     }
-                    // string disastermsg = "R" + clients_list[clients_list[fd]->pair_fd]->ip_cache;
-                    // strcpy(send_buff_disaster, disastermsg.c_str());
-                    // send(clients_list[clients_list[fd]->pair_fd]->pair_fd, send_buff_disaster, BUF_SIZE, 0);
-
-                    // clients_list.erase(fd);//清除clients_list
-                    //======================================================================================
-                    //TODO  广播通知备份变主 =======这里的格式没有定下来
-                    // close(fd);
                 }
-                }
+            }
         }
         sleep(3);
     }
 }
-
-// void extendCapability(){
-//     int index = fd_node.size();
-//     cacheAddrHash.addNode(index);
-// }
-
-// void shrinkageCapacity(){
-//     int index = fd_node.size()-1;
-//     // fd_node.pop();
-//     cacheAddrHash.deleteNode(index);
-// }
-
-// void Master::updateKeyCacheMapByCacheReq(string msg){
-//     vector<string> vtmsg = split(msg, "#");
-//     string cacheServerAddrStr = vtmsg[1];
-//     string cacheServerPortStr = vtmsg[2];
-//     string key = vtmsg[3];
-//     cout<<"the key is update: key = " << key << "cache: "<<cacheServerAddrStr<<":"<<cacheServerPortStr<<endl;
-// }

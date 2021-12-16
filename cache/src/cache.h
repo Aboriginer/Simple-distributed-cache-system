@@ -109,6 +109,9 @@ private:
     std::string pr_status_;
     // IP port信息
     std::string status_, local_cache_IP_, port_for_client_, port_for_cache_;
+    bool initial_flag;
+    // TODO：测试用，待删除
+    int i = 0;
 };
 
 void addfd( int epollfd, int fd, bool enable_et );
