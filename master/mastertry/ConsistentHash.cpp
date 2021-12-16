@@ -58,11 +58,24 @@ size_t ConsistentHash::GetServer(const char* key)
     }
     return it->first;
 }
+// void ConsistentHash::deleteNode(const int index)
+// {
+//     for(int i = 0; i < v_nodes; ++i){
+//         stringstream s;
+//         s << "SHARD-" << index << "NODE-" << i;
+//         uint32_t key = murmur3_32(s.str().c_str(), strlen(s.str().c_str()));
+//         map<uint32_t, size_t>::iterator it = key2Index.find(key);
+//         if(it != key2Index.end())
+//         {
+//             key2Index.erase(it);
+//         }
+//     }
+// }
 void ConsistentHash::deleteNode(const int index)
 {
     for(int i = 0; i < v_nodes; ++i){
         stringstream s;
-        s << "SHARD-" << index << "NODE-" << i;
+        s << "SHARD-" << nodes-1 << "NODE-" << i;
         uint32_t key = murmur3_32(s.str().c_str(), strlen(s.str().c_str()));
         map<uint32_t, size_t>::iterator it = key2Index.find(key);
         if(it != key2Index.end())
@@ -70,6 +83,20 @@ void ConsistentHash::deleteNode(const int index)
             key2Index.erase(it);
         }
     }
+    
+    this->nodes = this->nodes-1;
+    for(int i = index; i < nodes; ++i) //i:ip
+    {
+        for(int j = 0; j < v_nodes; ++j) 
+        {
+            stringstream s;
+            s << "SHARD-" << i << "NODE-" << j;
+            uint32_t key1 = murmur3_32(s.str().c_str(), strlen(s.str().c_str()));
+            key2Index[key1] = i;
+            // key2Index.insert(pair<uint32_t, size_t>(key1, i));
+        }
+    }
+    cout<<"ConsistentHash"<<this->nodes<<endl;
 }
 void ConsistentHash::addNode(const int index)
 {
@@ -79,4 +106,6 @@ void ConsistentHash::addNode(const int index)
         uint32_t key = murmur3_32(s.str().c_str(), strlen(s.str().c_str()));
         key2Index.insert(pair<uint32_t, size_t>(key, index));
     }
+    this->nodes = this->nodes+1;
+    cout<<"ConsistentHash"<<this->nodes<<endl;
 }
