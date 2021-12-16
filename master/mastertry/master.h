@@ -49,7 +49,7 @@ public:
     // cache是否存活的map
     unordered_map<string, time_t> cacheAddrMap;
     // 接入的cache列表：fd-cache详细信息
-    std::unordered_map<int, struct fdmap *> clients_list;
+    std::unordered_map<int, struct fdmap *> caches_list;
     // 接入的主cache对应的fd列表：
     std::vector<int> fd_node;
 
@@ -144,11 +144,11 @@ static vector<string> split(string s, string seperator){
 struct fdmap {
     char status;            //  'P'/'R'
     int fd;
-    int vec;                //fd_node里的index
+    int vec;
     int pair_fd;            //  pair fd
     std::string ip_port;    //  IP#PORT_for_client
     std::string ip_cache;    //  IP#PORT_for_cache
-    fdmap(int fd) :status('n'), fd(fd), vec(-2), pair_fd(-1), ip_port("0"), ip_cache("0"){} //无参数的构造函数数组初始化时调用
+    fdmap(int fd) :status('n'), fd(fd), pair_fd(-1), ip_port("0"), ip_cache("0"){} //无参数的构造函数数组初始化时调用
 };
 
 #endif
