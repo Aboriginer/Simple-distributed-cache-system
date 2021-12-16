@@ -107,7 +107,7 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
 
 
 void Cache::Heartbeat() {
-    static auto timer = std::make_shared<Timer> (100, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
+    static auto timer = std::make_shared<Timer> (10, true, nullptr, nullptr); //10ms上传一次心跳包
     timer->setCallback([this](void * pdata){
 
         char send_buff_master[BUF_SIZE], recv_buff_master[BUF_SIZE];
