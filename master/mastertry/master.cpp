@@ -218,7 +218,7 @@ void Master::start_cache() {
                         if (vtmsg[4] == "P") {  //主cache
                             int index = fd_node.size();
                             it->vec = index;
-                            cout<< "vec: " it->vec<<endl;
+                            cout<< "vec: " <<it->vec<<endl;
                             fd_node.push_back(client_events[i].data.fd);    //放入主cache向量fd_node
                             if (!rcache.empty()) {  //有多余的备份
                                 it->pair_fd = rcache.top();
@@ -341,11 +341,11 @@ void Master::shrinkageCapacity(){
             }
             if(clients_list[fd]->pair_fd>0){//如果有备份cache
                 auto addr1 = clients_list.erase(clients_list[fd]->pair_fd);// 删除缩容的配偶cache
-                close(clients_list[fd]->pair_fd);//关闭配偶的cache通信
+                // close(clients_list[fd]->pair_fd);//关闭配偶的cache通信
             }
             fd_node.pop_back();
             auto addr = clients_list.erase(fd);                         //删除主cache
-            close(fd);                                //关闭主socket
+            // close(fd);                                //关闭主socket
             // 这里有两个问题：
             // 1 删除的信息可能没有同步到其他线程——>需要测试
             // 2 缩容里主备分部分需要做的内容
@@ -476,9 +476,10 @@ void Master::periodicDetectCache(){
                         
                     }
                     else{
+                        cout<<"I have to delete "<<index<<":"<<clients_list[fd_node[index]]->ip_cache<<endl;
                         // 如果cache_1没有备份cache，则
                         // 更改本地fd_node
-                        fd_node.erase(index);
+                        fd_node.erase(fd_node.begin()+index);
                         cacheAddrHash.deleteNode(index);
                         //master通知所有cache，将原本存ip_port的数据里,cache_1的数据删除，
                         //------------------------------------------------------
@@ -490,6 +491,7 @@ void Master::periodicDetectCache(){
                             strcpy(send_buff_disaster, toAllCacheDeleteMsg.c_str());
                             send(fdi, send_buff_disaster, BUF_SIZE, 0);
                         }
+                        cout<<fd_node.size()<<":"<<clients_list.size()<<endl;
                         // 本地操作
                         clients_list.erase(fd);//清除clients_list
                         close(fd);
