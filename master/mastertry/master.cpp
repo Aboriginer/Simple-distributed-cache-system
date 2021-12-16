@@ -212,18 +212,52 @@ void Master::start_cache() {
                         it->ip_port = socli; //写ip_port
                         it->ip_cache = socac;
                         cout<<it->ip_port<<endl;
-                        clients_list[client_events[i].data.fd]->status = vtmsg[4][0]; //写主备
+                        it->status = vtmsg[4][0]; //写主备
                         // cout<<socli<<endl;
                         //分配备份server
                         if (vtmsg[4] == "P") {  //主cache
+                            int index = fd_node.size();
+                            it->vec = index;
+                            cout<< "vec: " it->vec<<endl;
                             fd_node.push_back(client_events[i].data.fd);    //放入主cache向量fd_node
                             if (!rcache.empty()) {  //有多余的备份
-                                clients_list[client_events[i].data.fd]->pair_fd = rcache.top();
+                                it->pair_fd = rcache.top();
                                 clients_list[rcache.top()]->pair_fd = client_events[i].data.fd;
                                 rcache.pop();
                             }
                             else {  //没有多余的备份
                                 pcache.push(client_events[i].data.fd);
+                            }
+                            // 扩容===============================================
+                            // 假设检测到一个新上线的cache
+                            cacheAddrHash.addNode(index);// 在哈希部分增加节点
+                            int fd = fd_node[index];// 获取fd的值
+                            string cacheServerAddr = clients_list[fd]->ip_cache;// 找到fd对应的ip和port(for cache)
+                            // 向新上线的cache单独发送所有cache的IP和port
+                            // ip1#port1#ip2#port2...
+                            string allcache;
+                            for(auto fdi : fd_node){
+                                allcache = allcache + "#" + clients_list[fdi]->ip_cache;
+                            }
+                            allcache = allcache.substr(1, allcache.length());
+                            cout<<"send msg \'"<< allcache <<"\' to cache" <<cacheServerAddr <<endl;
+                            strcpy(send_buff_client, allcache.c_str());
+                            send(fd, send_buff_client, BUF_SIZE, 0);
+
+                            // N#new_ip#new_port
+                            string extendmsg = "N#"+cacheServerAddr;
+                            // 然后把这个extendmsg发给所有的cache====广播
+                            // 广播新上线的cache
+                            cout<<"send msg \'"<< extendmsg <<"\' to all cache"<<endl; 
+                            for(auto fdi : fd_node){//将新加入的cache的ip和port发给所有的cache
+                                cout<<"-------------------------------------------"<<endl;
+                                // cout<<"the fd is "<<fdi<<endl;
+                                cout<<"send msg \'"<< extendmsg <<"\' to " << clients_list[fdi]->ip_cache <<endl; 
+                                strcpy(send_buff_client, extendmsg.c_str());
+                                // cout<<"send_buff_client"<<send_buff_client<<endl;
+                                cout<<"-------------------------------------------"<<endl;
+                                send(fdi, send_buff_client, BUF_SIZE, 0);
+                                // sleep(1);
                             }
                         }
                         else if (vtmsg[4] == "R") {
@@ -237,39 +271,7 @@ void Master::start_cache() {
                             }
                         }                       
                         
-                        // 扩容===============================================
                         
-                        // 假设检测到一个新上线的cache
-                        int index = fd_node.size()-1;// 获取它的实际节点索引
-                        cacheAddrHash.addNode(index);// 在哈希部分增加节点
-                        int fd = fd_node[index];// 获取fd的值
-                        string cacheServerAddr = clients_list[fd]->ip_cache;// 找到fd对应的ip和port(for cache)
-                        // 向新上线的cache单独发送所有cache的IP和port
-                        // ip1#port1#ip2#port2...
-                        string allcache;
-                        for(auto fdi : fd_node){
-                            allcache = allcache + "#" + clients_list[fdi]->ip_cache;
-                        }
-                        allcache = allcache.substr(1, allcache.length());
-                        cout<<"send msg \'"<< allcache <<"\' to cache" <<cacheServerAddr <<endl;
-                        strcpy(send_buff_client, allcache.c_str());
-                        send(fd, send_buff_client, BUF_SIZE, 0);
-
-                        // N#new_ip#new_port
-                        string extendmsg = "N#"+cacheServerAddr;
-                        // 然后把这个extendmsg发给所有的cache====广播
-                        // 广播新上线的cache
-                        cout<<"send msg \'"<< extendmsg <<"\' to all cache"<<endl; 
-                        for(auto fdi : fd_node){//将新加入的cache的ip和port发给所有的cache
-                            cout<<"-------------------------------------------"<<endl;
-                            // cout<<"the fd is "<<fdi<<endl;
-                            cout<<"send msg \'"<< extendmsg <<"\' to " << clients_list[fdi]->ip_cache <<endl; 
-                            strcpy(send_buff_client, extendmsg.c_str());
-                            // cout<<"send_buff_client"<<send_buff_client<<endl;
-                            cout<<"-------------------------------------------"<<endl;
-                            send(fdi, send_buff_client, BUF_SIZE, 0);
-                            // sleep(1);
-                        }
                         //========================================================
                     }
                     //发送应答 p/r#ip#port
@@ -430,20 +432,10 @@ void Master::periodicDetectCache(){
 // 如果cache_1有备份cache_2，则master设置将备份cache_2变为主cache，并且master通知备份cache_2现在是主cache，通知所有cache，将原本存ip_port的数据里，cache_1的位置更新为cache_2的位置
 // 如果cache_1没有备份cache，则master通知所有cache，将原本存ip_port的数据里,cache_1的数据删除，并且找到cache_1对应的cache索引index，删除哈希里的对应节点
                 else if (clients_list[fd]->status == 'P')  { //掉线的是主cache
+                    int index = clients_list[fd]->vec;
                     if(clients_list[fd]->pair_fd>0){//如果有备份cache
                         // 更改本地fd_node
-                        int index = 0;
-                        for(vector<int>::iterator it=fd_node.begin(); it!=fd_node.end(); ){   
-                            if(* it == fd){
-                                // it = fd_node.erase(it); 
-                                fd_node[index] = clients_list[fd]->pair_fd; // 把fd更改了
-                                break;
-                            }
-                            else{
-                                ++it;
-                            }
-                            ++index;
-                        }
+                        fd_node[index] = clients_list[fd]->pair_fd; // 把fd更改了
                         // =======================================================================================================
                         // // master通知备份cache_2现在是主cache,并同步所有的ipport
                         // // cache_2 的fd：clients_list[clients_list[fd]->pair_fd]->pair_fd
@@ -477,6 +469,7 @@ void Master::periodicDetectCache(){
                         // 本地master的其他配置
                         clients_list[clients_list[fd]->pair_fd]->pair_fd = -1;  // 配偶清空
                         clients_list[clients_list[fd]->pair_fd]->status = 'P';  //备份变主
+                        clients_list[clients_list[fd]->pair_fd]->vec = index;   //备份索引更新
                         pcache.push(clients_list[fd]->pair_fd);  //待配对状态
                         clients_list.erase(fd);//清除clients_list
                         close(fd);
@@ -485,18 +478,8 @@ void Master::periodicDetectCache(){
                     else{
                         // 如果cache_1没有备份cache，则
                         // 更改本地fd_node
-                        int index = 0;
-                        for(vector<int>::iterator it=fd_node.begin(); it!=fd_node.end(); ){   
-                            if(* it == fd){
-                                it = fd_node.erase(it); //删除
-                                cacheAddrHash.deleteNode(index);
-                                break;
-                            }
-                            else{
-                                ++it;
-                            }
-                            ++index;
-                        }
+                        fd_node.erase(index);
+                        cacheAddrHash.deleteNode(index);
                         //master通知所有cache，将原本存ip_port的数据里,cache_1的数据删除，
                         //------------------------------------------------------
                         // D#delete_ip#delete_port
