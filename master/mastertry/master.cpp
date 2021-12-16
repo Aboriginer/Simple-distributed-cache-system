@@ -196,14 +196,16 @@ void Master::start_cache() {
                         // continue;
                         // 这里还是会接收到关掉的那个cache，我不知道要怎么把他关掉，就直接continue了
                     } */
-                    cout<<"msg:"<<recv_buff_client<<endl;
+                    // cout<<"msg:"<<recv_buff_client<<endl;
                     struct fdmap *it = clients_list[client_events[i].data.fd];
                     //————————————————————————————————-————--————————————————————————————————————————————
-                    std::cout << "get heartbeat from cache server:" << recv_buff_client << std::endl; 
+                    // std::cout << "get heartbeat from cache server:" << recv_buff_client << std::endl; 
                     string recv_buff_str = recv_buff_client;
                     vector<string> vtmsg = split(recv_buff_str, "#");
                     if (clients_list[client_events[i].data.fd]->ip_port == "0") {   //第一次接受心跳
-                        cout<<"clients_list[client_events[i].data.fd]->ip_port" << clients_list[client_events[i].data.fd]->ip_port << endl;
+                    
+                        cout<<"===================the new cache is access=============================="<<endl;
+                        // cout<<"clients_list[client_events[i].data.fd]->ip_port" << clients_list[client_events[i].data.fd]->ip_port << endl;
                         string socli = vtmsg[1]+"#"+vtmsg[2];
                         string socac = vtmsg[1]+"#"+vtmsg[3];
                         //cout<<socli<<endl;
@@ -259,9 +261,14 @@ void Master::start_cache() {
                         // 广播新上线的cache
                         cout<<"send msg \'"<< extendmsg <<"\' to all cache"<<endl; 
                         for(auto fdi : fd_node){//将新加入的cache的ip和port发给所有的cache
-                            cout<<"the fd is "<<fdi<<endl;
+                            cout<<"-------------------------------------------"<<endl;
+                            // cout<<"the fd is "<<fdi<<endl;
+                            cout<<"send msg \'"<< extendmsg <<"\' to " << clients_list[fdi]->ip_cache <<endl; 
                             strcpy(send_buff_client, extendmsg.c_str());
+                            // cout<<"send_buff_client"<<send_buff_client<<endl;
+                            cout<<"-------------------------------------------"<<endl;
                             send(fdi, send_buff_client, BUF_SIZE, 0);
+                            // sleep(1);
                         }
                         //========================================================
                     }
@@ -341,6 +348,11 @@ void Master::shrinkageCapacity(){
             if(clients_list[fd]->pair_fd>0){//如果有备份cache
                 auto addr1 = clients_list.erase(clients_list[fd]->pair_fd);// 删除缩容的配偶cache
                 close(clients_list[fd]->pair_fd);//关闭配偶的cache通信
+            }
+        }
+        else if(c=='c'){
+            for(auto cache : clients_list){
+                cout<<cache.second->ip_cache<< " is active." <<endl;
             }
         }
     }
