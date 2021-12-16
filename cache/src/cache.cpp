@@ -4,11 +4,6 @@
 
 #include "cache.h"
 
-// bool operator == (const std::pair<std::string, std::string> &a, 
-//                         std::pair<std::string, std::string> &b){
-//                             return a.first == b.first;
-//                         }
-
 Cache::Cache(int cache_size_local, std::string status, std::string local_cache_IP, std::string port_for_client,
              std::string port_for_cache) {
     cache_size_local_ = cache_size_local;
@@ -139,7 +134,7 @@ void Cache::Heartbeat() {
         // std::cout << "recv:" << recv_buff_master << std::endl;
         // std::cout << "=====================i:" << i << std::endl;
         if (len != 0 && initial_flag) {
-            if (recv_buff_master[0] != 'P') std::cout << "Receive from master:" <<  recv_buff_master << std::endl;
+            if (recv_buff_master[0] != 'P' && recv_buff_master[0] != 'R') std::cout << "Receive from master:" <<  recv_buff_master << std::endl;
             ReadFromMaster(recv_buff_master);
         }
         // std::cout << "===================== second i:" << i << std::endl;
@@ -471,7 +466,7 @@ void Cache::cache_pass(){
         }
         //这把锁在to_replica线程里也会被管理，只有那里被解锁之后才能进行exit操作。
         end_mutex.lock();
-        std::cout << "?????????????????????????????exit" << std::endl;
+//        std::cout << "?????????????????????????????exit" << std::endl;
         exit(0);
         end_mutex.unlock();
     }else if(status_ == "P"){
@@ -528,19 +523,20 @@ void Cache::replica_chat() {
     while (true) {
         // 接收Master心跳包时要更新pr_status_
         if (pr_status_ == "P") {   // 本地cache是主cache，作为服务器端
-            if (target_port_ != "None") {    // 确定备份cache已上线
+            int clnt_sock;
+            struct sockaddr_in clnt_adr;
+            socklen_t clnt_adr_sz = sizeof(clnt_adr);
+            int serv_sock = server_socket(local_cache_IP_, port_for_cache_);
+            clnt_sock = accept(serv_sock, (struct sockaddr*)&clnt_adr, &clnt_adr_sz);
 
-                int clnt_sock;
-                struct sockaddr_in clnt_adr;
-                socklen_t clnt_adr_sz = sizeof(clnt_adr);
-                int serv_sock = server_socket(local_cache_IP_, port_for_cache_);
-                clnt_sock = accept(serv_sock, (struct sockaddr*)&clnt_adr, &clnt_adr_sz);
+            if (target_port_ != "None") {    // 确定备份cache已上线
                 std::cout << "client connection from:" << inet_ntoa(clnt_adr.sin_addr) << ":"
                           << ntohs(clnt_adr.sin_port) << ", client_fd = " << clnt_sock << std::endl;
 
                 std::string send_message;
                 char send_buff_replica[BUF_SIZE];
                 while (true) {
+//                    std::cout << "server>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
                     // cache_list_update_flag = true;  // 用于测试
                     // kv_update_flag = true;  // 用于测试
                     if (cache_list_update_flag) {   // cache_list有更新
@@ -579,10 +575,13 @@ void Cache::replica_chat() {
                 close(clnt_sock);
             }
         }   else {  // 本地cache是备份cache，作为客户端
+            // TODO:
+//            target_port_ = "8899";
+//            target_IP_ = "127.0.0.1";
             if (target_port_ != "None") {
                 std::string recv_message;
                 char recv_buff_primary[BUF_SIZE];
-                std::cout << "Server connection from:";
+                std::cout << "Server connection from, IP:" << target_IP_ << ",port:" << target_port_ << std::endl;
                 int clnt_sock = client_socket(target_IP_, target_port_);
                 while (true) {
                     if (pr_status_ != "R") {
