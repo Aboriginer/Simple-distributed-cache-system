@@ -32,14 +32,14 @@ void Cache::Start() {
     auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
     auto Client_chat_bind = std::bind(&Cache::Client_chat, this);
     auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
-    // auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
+    auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
 
     std::thread for_master_Heartbeat(Heartbeat_bind);
     std::thread for_client(Client_chat_bind);
     std::thread for_cache(Cache_pass_bind);
-    // std::thread for_replica(Cache_replica_bind);
+    std::thread for_replica(Cache_replica_bind);
 
-    // for_replica.join();
+    for_replica.join();
     for_cache.join();
     for_client.join();
     for_master_Heartbeat.join();
@@ -130,7 +130,7 @@ void Cache::Heartbeat() {
         bzero(send_buff_master, BUF_SIZE);
         bzero(recv_buff_master, BUF_SIZE);
 
-        i ++;
+        // i ++;
         bzero(recv_buff_master, BUF_SIZE);
         // 设置为非阻塞模式接收信息
         int len = recv(cache_master_sock, recv_buff_master, BUF_SIZE, MSG_DONTWAIT);
@@ -250,7 +250,7 @@ void Cache::Client_chat() {
                 bzero(recv_buff_client, BUF_SIZE);
                 int len = recv(client_events[i].data.fd, recv_buff_client, BUF_SIZE - 1, 0);
                 
-                // TODO:
+                // 打印输出显示用
                 std::string client_request_status;
                 std::string return_key;
                 char* Delimiter = strchr(recv_buff_client, '#');
@@ -279,7 +279,7 @@ void Cache::Client_chat() {
                     //向端口传出数据：SUCCESS/FAILED#key#ip:port(cache server)
                     send(client_events[targetPort].data.fd, send_buff_client, BUF_SIZE, 0);
 
-                    // TODO:
+                    // 打印输出显示用
                     std::string return_status;
                     if (buffer[0] == 'S') return_status = ",SUCCESS";
                     else return_status = ",FAILED";
@@ -375,10 +375,10 @@ void Cache::ReadFromMaster(std::string message) {
         dying_cache_Port = part(message, spear, 2);
         
         // TODO：这里感觉应该更新完cache_list再把状态改为K
+        update_cache(dying_cache_IP_, dying_cache_Port, "K"); // 更新cache_list
         if(dying_cache_IP_ == local_cache_IP_ && dying_cache_Port == port_for_cache_){
             status_ = "K";
         }
-        update_cache(dying_cache_IP_, dying_cache_Port, "K"); // 更新cache_list
     }else if(head == "N"){
         std::string neo_cache_IP = part(message, spear, 1);
         std::string neo_cache_Port = part(message, spear, 2);
@@ -479,7 +479,7 @@ void Cache::cache_pass(){
         cache_list_update_flag = true;
         std::cout<<"cache_list_update_flag == "<< (cache_list_update_flag ? "true" : "false") <<std::endl;
         // TODO：为啥这里要sleep
-        sleep(4);
+        // sleep(4);
     }else if(status_ == "R"){
         from_single_cache(local_cache_IP_, port_for_cache_);
     }
@@ -487,8 +487,6 @@ void Cache::cache_pass(){
 
 //更新其他IP地址
 void Cache::update_cache(std::string &IP, std::string &port,std::string status){
-    
-    
     if(status == "N"){
         // TODO:初始化后不加入cache本身
         if (IP != local_cache_IP_ || port != port_for_cache_) {
@@ -527,7 +525,7 @@ void Cache::update_cache(std::string &IP, std::string &port,std::string status){
 // 容灾
 void Cache::replica_chat() {
     while (true) {
-        // TODO:接收Master心跳包时要更新pr_status_
+        // 接收Master心跳包时要更新pr_status_
         if (pr_status_ == "P") {   // 本地cache是主cache，作为服务器端
             if (target_port_ != "None") {    // 确定备份cache已上线
 
