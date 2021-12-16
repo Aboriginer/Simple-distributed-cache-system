@@ -31,16 +31,16 @@ Cache::Cache(int cache_size_local, std::string status, std::string local_cache_I
 void Cache::Start() {
     auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
     auto Client_chat_bind = std::bind(&Cache::Client_chat, this);
-//    auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
+   auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
 //    auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
 
     std::thread for_master_Heartbeat(Heartbeat_bind);
     std::thread for_client(Client_chat_bind);
-//    std::thread for_cache(Cache_pass_bind);
+   std::thread for_cache(Cache_pass_bind);
 //    std::thread for_replica(Cache_replica_bind);
 
 //    for_replica.join();
-//    for_cache.join();
+   for_cache.join();
     for_client.join();
     for_master_Heartbeat.join();
 }
@@ -107,7 +107,7 @@ void Cache::initial(int cache_master_sock, char *recv_buff_initial) {
 
 
 void Cache::Heartbeat() {
-    static auto timer = std::make_shared<Timer> (1000, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
+    static auto timer = std::make_shared<Timer> (100, true, nullptr, nullptr); //1000ms上传一次心跳包, 第一个参数单位 100ms
     timer->setCallback([this](void * pdata){
 
         char send_buff_master[BUF_SIZE], recv_buff_master[BUF_SIZE];
@@ -146,6 +146,7 @@ void Cache::Heartbeat() {
             initial_flag = true;
         }
         std::cout << "===================== last i:" << i << std::endl;
+        std::cout << ">>>>>>>>>>>>>>>>>>>>>>>cache_list size:" << cache_list.size() << std::endl; 
     });
     timer->start();
 }
@@ -436,7 +437,6 @@ void Cache::cache_pass(){
             std::cout<<"cache = "<<otherIP[i]<<":"<<otherPort[i]<<std::endl;
             to_single_cache(otherIP[i], otherPort[i], out_key[i]);
         }
-        sleep(3);   // 等待备份cache退出
         //这把锁在to_replica线程里也会被管理，只有那里被解锁之后才能进行exit操作。
         end_mutex.lock();
         exit(0);
@@ -457,9 +457,13 @@ void Cache::update_cache(std::string &IP, std::string &port,std::string status){
     
     
     if(status == "N"){
-//        auto pair = {IP, port};
-        pair <std::string , std::string> pair (IP, port);
-        cache_list.emplace_back(pair);
+        // TODO:初始化后不加入cache本身
+        if (IP != local_cache_IP_ || port != port_for_cache_) {
+            pair <std::string , std::string> pair (IP, port);
+            cache_list.emplace_back(pair);
+        }
+        // pair <std::string , std::string> pair (IP, port);
+        // cache_list.emplace_back(pair);
     }else if(status == "K"){
         dying_cache_IP_ = IP;
         dying_cache_Port = port;
