@@ -19,8 +19,8 @@
 
 #include "easylogging++.h"
 #include "lru.hpp"
-#include "tools.hpp"
-#include "timer.hpp"
+#include "tools.h"
+#include "timer.h"
 
 const int BUF_SIZE = 0xFFFF;  // 通信缓冲区大小
 
@@ -28,13 +28,13 @@ const char MASTER_IP[10] = "127.0.0.1";
 const int MASTER_PORT = 10000;
 const int CACHESEVER_PORT = 8887;
 
-const int KEY_LENGTH = 10;
-const int VALUE_LENGTH = 20;
+const int KEY_LENGTH = 3;
+const int VALUE_LENGTH = 2000;
 
 const int MAX_EVENT_NUMBER = 100;
 const int EPOLL_SIZE = 100;
 
-const int REQUEST_INTERVAL = 20;  // 产生读写请求间隔，单位 ms
+const int REQUEST_INTERVAL = 50;  // 产生读写请求间隔，单位 ms
 
 const int WAITING_TIME = 5;  // 应用层超时重传等待时间，单位 100ms
 
@@ -46,7 +46,7 @@ struct ReSendMassage {
 	std::string addr;
 	std::string massage;
 	std::shared_ptr<Timer> timer;
-	int num = 0; // DEBUG
+	int num = 0;  // 记录发送给某个cache的请求总数
 };
 
 class Client {

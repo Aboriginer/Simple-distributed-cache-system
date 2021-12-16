@@ -1,6 +1,6 @@
 #include <getopt.h>
 
-#include "client.hpp"
+#include "client.h"
 #include "easylogging++.h"
 
 INITIALIZE_EASYLOGGINGPP

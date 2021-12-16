@@ -6,7 +6,7 @@
 #include <iostream>
 #include <sstream>
 
-#include "tools.hpp"
+#include "tools.h"
 
 std::string strRand(int length) {
   char tmp;

@@ -5,7 +5,7 @@
 
 #include <list>
 
-#include "timer.hpp"
+#include "timer.h"
 
 std::list<Timer *> Timer::pTimers;
 

@@ -1,4 +1,4 @@
-#include "client.hpp"
+#include "client.h"
 
 typedef std::function<void (void *)> fp;
 
@@ -135,7 +135,7 @@ void Client::check_cache_server_request_map() {
 				// TODO: 协商数据包格式
 				send_request_to_master(*it2);
 				LOG(ERROR) << "Re-send to master, key: " + *it2;
-				usleep(10 * 1000);
+				usleep(1000);
 			}
 			it->second.clear();
 		}
