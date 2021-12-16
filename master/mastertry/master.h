@@ -144,10 +144,11 @@ static vector<string> split(string s, string seperator){
 struct fdmap {
     char status;            //  'P'/'R'
     int fd;
+    int vec;                //fd_node里的index
     int pair_fd;            //  pair fd
     std::string ip_port;    //  IP#PORT_for_client
     std::string ip_cache;    //  IP#PORT_for_cache
-    fdmap(int fd) :status('n'), fd(fd), pair_fd(-1), ip_port("0"), ip_cache("0"){} //无参数的构造函数数组初始化时调用
+    fdmap(int fd) :status('n'), fd(fd), vec(-2), pair_fd(-1), ip_port("0"), ip_cache("0"){} //无参数的构造函数数组初始化时调用
 };
 
 #endif
