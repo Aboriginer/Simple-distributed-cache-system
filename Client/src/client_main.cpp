@@ -16,15 +16,17 @@ int main(int argc, char *argv[]) {
 	char mode; 
 	bool from_file = false;
 	int c;
+	int time_interval = 1000;  // 产生请求的时间间隔
 	static struct option long_options[] = {
 			{"capacity", required_argument, nullptr, 'c'},
 			{"write", no_argument, nullptr, 'w'},
 			{"read", no_argument, nullptr, 'r'},
-			{"from_file", no_argument, nullptr, 'f'}};
+			{"from_file", no_argument, nullptr, 'f'},
+			{"time", no_argument, nullptr, 't'}};
 	// 命令行解析
 	while (1) {
 		int opt_index = 0;
-		c = getopt_long(argc, argv, "c:wrf", long_options, &opt_index);
+		c = getopt_long(argc, argv, "c:wrft:", long_options, &opt_index);
 
 		if (-1 == c) {
 			break;
@@ -42,8 +44,12 @@ int main(int argc, char *argv[]) {
 			mode = 'r';
 			break;
 		case 'f':
-			std::cout << "from local file" << std::endl;
+			std::cout << "from local file  ";
 			from_file = true;
+			break;
+		case 't':
+			time_interval = atoi(optarg);
+			std::cout << "time interval: " << optarg <<	" ms" << std::endl;
 			break;
 		default:
 			std::cout << "???" << std::endl;
@@ -51,7 +57,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	Client client(local_cache_capacity, mode, from_file);
+	Client client(local_cache_capacity, mode, from_file, time_interval);
 	client.init();
 	client.start();
 }

@@ -29,12 +29,12 @@ const int MASTER_PORT = 10000;
 const int CACHESEVER_PORT = 8887;
 
 const int KEY_LENGTH = 3;
-const int VALUE_LENGTH = 2000;
+const int VALUE_LENGTH = 20;
 
-const int MAX_EVENT_NUMBER = 100;
+const int MAX_EVENT_NUMBER = 10;
 const int EPOLL_SIZE = 100;
 
-const int REQUEST_INTERVAL = 50;  // 产生读写请求间隔，单位 ms
+// const int REQUEST_INTERVAL = 2000;  // 产生读写请求间隔，单位 ms
 
 const int WAITING_TIME = 5;  // 应用层超时重传等待时间，单位 100ms
 
@@ -52,7 +52,7 @@ struct ReSendMassage {
 class Client {
 
 public:
-	Client(int cache_size_local, char mode, bool from_file);
+	Client(int cache_size_local, char mode, bool from_file, int time_interval);
 	void init();
 
 	void start();
@@ -94,6 +94,7 @@ private:
 	// client的模式 -w write, -r read, -f 读取本地文件
 	char mode_;
 	char from_file_;
+	int request_interval_;
 
 	epoll_event events_[MAX_EVENT_NUMBER];
 

@@ -2,9 +2,10 @@
 
 typedef std::function<void (void *)> fp;
 
-Client::Client(int cache_size_local, char mode, bool from_file) {
+Client::Client(int cache_size_local, char mode, bool from_file, int time_interval) {
 	mode_ = mode;
 	from_file_ = from_file;
+	request_interval_ = time_interval;
 
 	cache_size_local_ = cache_size_local;
 	local_lru_ = std::make_shared<
@@ -68,14 +69,14 @@ void Client::start() {
 					LOG(ERROR) << "Open key_list file failed";
 				}
 				while(!key_list_file.eof()) { 
-					usleep(REQUEST_INTERVAL * 1000);
+					usleep(request_interval_ * 1000);
 					key_list_file >> key;
 					std::cout << "Read from key_list file, key = " << key << std::endl;
 					send_key_to_father(key, mode_);
 				} 
 				key_list_file.close();
 			} else {
-				usleep(REQUEST_INTERVAL * 1000);
+				usleep(request_interval_ * 1000);
 				key = strRand(KEY_LENGTH);
 				send_key_to_father(key, mode_);
 			}
@@ -89,19 +90,21 @@ void Client::start() {
 			for (int i = 0; i < epoll_events_count; ++i) {
 				if (events_[i].data.fd == pipe_fd_[0]) {
 					// 子进程写入，message example: "CHILD#KEY"
+					memset(&message_, 0, BUF_SIZE);
 					read(events_[i].data.fd, message_, BUF_SIZE);
 					dealwith_child(message_);
 					check_cache_server_request_map();  // TODO: 改为定时事件
 				} else if (events_[i].data.fd == master_sock_) {
 					// master消息，message example: "MASTER#KEY#ip:port"
+					memset(&message_, 0, BUF_SIZE);
 					read(events_[i].data.fd, message_, BUF_SIZE);
-					
 					dealwith_master(message_);
 				} else {
 					// cache server消息，message example: SUCCESS/FAILED#key#ip:port 
+					memset(&message_, 0, BUF_SIZE);
 					read(events_[i].data.fd, message_, BUF_SIZE);
 					dealwith_cache_server(message_);
-					close(events_[i].data.fd);  // DEBUG
+					close(events_[i].data.fd);
 					epoll_ctl(epollfd_, EPOLL_CTL_DEL, events_[i].data.fd, nullptr);
 				}
 			}
@@ -135,7 +138,7 @@ void Client::check_cache_server_request_map() {
 				// TODO: 协商数据包格式
 				send_request_to_master(*it2);
 				LOG(ERROR) << "Re-send to master, key: " + *it2;
-				usleep(1000);
+				usleep(100000);
 			}
 			it->second.clear();
 		}
@@ -238,7 +241,7 @@ void Client::dealwith_master(const char* message) {
 	std::vector<std::string> message_array;
 	split(message, message_array, '#');
 	if (message_array.size() != 3) {
-		LOG(ERROR) << "Recved message from Master error";
+		// LOG(ERROR) << message;
 		return;
 	}
 	std::string& state = message_array[0];
@@ -254,7 +257,7 @@ void Client::dealwith_master(const char* message) {
 			send_request_to_cache_server(addr, key, strRand(VALUE_LENGTH));
 		}
 	} else {
-		LOG(INFO) << "Request to master failed, key: " + key;
+		// LOG(INFO) << "Request to master failed, key: " + key;
 	}
 }
 
