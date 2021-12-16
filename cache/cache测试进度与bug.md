@@ -38,4 +38,6 @@ cached端待测试：
 
 <img src="https://s2.loli.net/2021/12/16/NLgQ4XZqwnCF7dB.png" alt="image-20211216112825177" style="zoom:50%;" />
 
-3.扩容的N#ip#port没有广播成功，之前在线的cache并没有收到N#ip#port
+3.cache心跳包函数，将send和recv写在一起，因为是定时发送心跳包，发送心跳定时时间长(1000ms)的话导致会接收不到master发的信息，定时时间短(100ms)的话可以接收到master发送的信息，但是cache有很大机率会卡住不动
+
+<img src="https://s2.loli.net/2021/12/16/EBPzXrfe5SgMF6J.png" alt="image-20211216121647894" style="zoom:50%;" />
