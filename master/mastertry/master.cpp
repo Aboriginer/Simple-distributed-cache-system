@@ -382,13 +382,17 @@ void Master::shrinkageCapacity()
                 strcpy(send_buff_shink, shrinkmsg.c_str());
                 send(fdi, send_buff_shink, BUF_SIZE, 0);
             }
+            while(heartBeatDetect(fd)){
+                continue;
+            }
             if (caches_list[fd]->pair_fd > 0)
             {                                                             //如果有备份cache
                 auto addr1 = caches_list.erase(caches_list[fd]->pair_fd); // 删除缩容的配偶cache
-                close(caches_list[fd]->pair_fd);                          //关闭配偶的cache通信
+                // close(caches_list[fd]->pair_fd);                          //关闭配偶的cache通信
             }
             fd_node.pop_back();
             auto addr = caches_list.erase(fd); //删除主cache
+
             close(fd);                         //关闭主socket
             // 这里有两个问题：
             // 1 删除的信息可能没有同步到其他线程——>需要测试
