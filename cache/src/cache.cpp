@@ -331,7 +331,11 @@ void slice(std::string message, std::string &key, std::string &val){
 //从目标IP地址接受信息
 //这里似乎没有将备份也考虑进去。
 void Cache::from_single_cache(std::string &ip, std::string &port){
+    
     char recv_buff_master[BUF_SIZE];
+    std::cout<<"status = "<<status_<<std::endl;
+    std::cout<<"from single cache "<<status_<<std::endl;
+    if(status_ == "K") return;
     int serv_sock = server_socket(ip, port);
     int clnt_sock;
     struct sockaddr_in clnt_adr;
@@ -364,7 +368,7 @@ void Cache::ReadFromMaster(std::string message) {
     };
     std::string head = message.substr(0,1);   //P或者R
     // std::cout << "====================ReadFromMaster i:" << i << std::endl;
-    std::lock_guard<std::mutex> guard(status_mutex);
+    
     if(head == "K"){
         dying_cache_IP_ = part(message, spear, 1);
         dying_cache_Port = part(message, spear, 2);
@@ -372,14 +376,22 @@ void Cache::ReadFromMaster(std::string message) {
         // TODO：这里感觉应该更新完cache_list再把状态改为K
         update_cache(dying_cache_IP_, dying_cache_Port, "K"); // 更新cache_list
         if(dying_cache_IP_ == local_cache_IP_ && dying_cache_Port == port_for_cache_){
+            // std::cout<<"i m dying "<<std::endl;
+            // status_mutex.lock();
             status_ = "K";
+            // status_mutex.unlock();
         }
     }else if(head == "N"){
         std::string neo_cache_IP = part(message, spear, 1);
         std::string neo_cache_Port = part(message, spear, 2);
+        // if(neo_cache_IP == local_cache_IP_ && neo_cache_IP == port_for_cache_){
+        //     return;
+        // }
         update_cache(neo_cache_IP, neo_cache_Port, "N");
     }else if(head =="P"){
+        // status_mutex.lock();
         status_ = head;
+        // status_mutex.unlock();
         pr_status_ = "P";   // 用于备份转正
         if(message.substr(2, message.size() - 2) == "None"){
             target_IP_ = "None";
@@ -389,7 +401,9 @@ void Cache::ReadFromMaster(std::string message) {
             target_port_ = part(message, spear, 2);
         }
     }else if(head == "R"){
+        // status_mutex.lock();
         status_ = head;
+        // status_mutex.unlock();
         if(message.substr(2, message.size() - 2) == "None"){
             target_IP_ = "None";
             target_port_ = "None";
@@ -434,6 +448,8 @@ void Cache::ReadFromMaster(std::string message) {
         auto it  = find_if(cache_list.begin(), cache_list.end(), equal);
         cache_list.erase(it);
     }
+    // status_mutex.unlock();
+    // std::cout<<"Read End."<<std::endl;
     // std::cout << "====================ReadFromMaster after i:" << i << std::endl;
 }
 
@@ -443,42 +459,62 @@ void Cache::cache_pass(){
     // dying_cache_Port = "8889";
     // std::cout<<"u r going to ..."<<std::endl;
     // std::cin>> status_;
-    // std::cout<<(status_ == "K" ? "die" : "primary")<<std::endl;
-    if(status_ == "K"){
-        // TODO：otherIP是啥含义，要缩容的所有IP？
-        // otherIP.push_back("127.0.0.1");
-        // otherPort.push_back("8888");
-        // std::cout<<"set"<<std::endl;
-        if(otherIP.size() == 0){
-            std::cout<<"IP address is not sent by the master."<<std::endl;
-            return;
+    std::cout<<"dying dying dying"<<std::endl;
+    std::cout<<(status_ == "K" ? " i m dying" : " i m primary")<<std::endl;
+    std::cout<<"status = "<<status_<<std::endl;
+    while(true){
+        // std::cout<<"hello"<<std::endl;
+        // std::cout<<status_<<std::endl;
+        // status_mutex.lock();
+        if(status_ == "K"){
+            // TODO：otherIP是啥含义，要缩容的所有IP？
+            // otherIP.push_back("127.0.0.1");
+            // otherPort.push_back("8888");
+            // std::cout<<"set"<<std::endl;
+            std::cout<<(status_ == "K" ? " i m dying" : " i m primary")<<std::endl;
+            if(cache_list.size() == 0){
+                std::cout<<"IP address is not sent by the master."<<std::endl;
+                return;
+            }
+            int size = cache_list.size();
+            std::cout << "Start cal_hash_key, cache_list size:" << cache_list.size() << std::endl;
+            //计算目标地址
+            cal_hash_key();
+            // out_key.push_back("123");
+            std::cout<< "done. size = "<<otherIP.size()<<std::endl;
+            for(int i = 0; i < otherIP.size(); i++){
+                std::cout<<"handling cache = "<<i<<std::endl;
+                std::cout<<"cache = "<<otherIP[i]<<":"<<otherPort[i]<<std::endl;
+                to_single_cache(otherIP[i], otherPort[i], out_key[i]);
+            }
+            //这把锁在to_replica线程里也会被管理，只有那里被解锁之后才能进行exit操作。
+            end_mutex.lock();
+    //        std::cout << "?????????????????????????????exit" << std::endl;
+            exit(0);
+            end_mutex.unlock();
+        }else if(status_ == "P"){
+            
+            if(dying_cache_IP_.size() == 0 || dying_cache_Port.size() == 0){
+                // std::cout<<"nth"<<std::endl;
+                continue;
+            }
+            std::cout<<"cache = "<<dying_cache_IP_<<" "<<dying_cache_Port<<std::endl;
+            if(status_ == "P"){
+                from_single_cache(local_cache_IP_, port_for_cache_);
+                cache_list_update_flag = true;
+                std::cout<<"cache_list_update_flag == "<< (cache_list_update_flag ? "true" : "false") <<std::endl;
+            }
+            
+            // TODO：为啥这里要sleep
+            // sleep(4);
+        }else if(status_ == "R"){
+            std::cout<<"I am replica"<<std::endl;
+            from_single_cache(local_cache_IP_, port_for_cache_);
         }
-        int size = otherIP.size();
-        std::cout << "Start cal_hash_key, cache_list size:" << cache_list.size() << std::endl;
-        //计算目标地址
-        cal_hash_key();
-        // out_key.push_back("123");
-        //传递数据
-        for(int i = 0; i < otherIP.size(); i++){
-            std::cout<<"handling cache = "<<i<<std::endl;
-            std::cout<<"cache = "<<otherIP[i]<<":"<<otherPort[i]<<std::endl;
-            to_single_cache(otherIP[i], otherPort[i], out_key[i]);
-        }
-        //这把锁在to_replica线程里也会被管理，只有那里被解锁之后才能进行exit操作。
-        end_mutex.lock();
-//        std::cout << "?????????????????????????????exit" << std::endl;
-        exit(0);
-        end_mutex.unlock();
-    }else if(status_ == "P"){
-        std::cout<<"cache = "<<dying_cache_IP_<<" "<<dying_cache_Port<<std::endl;
-        from_single_cache(local_cache_IP_, port_for_cache_);
-        cache_list_update_flag = true;
-        std::cout<<"cache_list_update_flag == "<< (cache_list_update_flag ? "true" : "false") <<std::endl;
-        // TODO：为啥这里要sleep
-        // sleep(4);
-    }else if(status_ == "R"){
-        from_single_cache(local_cache_IP_, port_for_cache_);
+        // status_mutex.unlock();
     }
+   
+    std::cout<<"this thread is end."<<std::endl;
 }
 
 //更新其他IP地址
@@ -681,10 +717,10 @@ void Cache::cal_hash_key() {
         std::string single = it.first + it.second;
         caches.push_back(single);
     }
-
+    std::cout<<"cache_list_size = "<<cache_list.size()<<std::endl;
     cache_hash.initialize(caches.size(), 100);
     std::vector<std::string> all_keys = MainCache.all_key();
-
+    std::cout<<"cache_list_size = "<<all_keys.size()<<std::endl;
     std::vector<size_t> all_index;
     if(otherIP.size() > 0) otherIP.clear();
     if(otherPort.size() > 0) otherPort.clear();
