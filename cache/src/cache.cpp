@@ -379,7 +379,7 @@ void Cache::from_single_cache(std::string &ip, std::string &port){
     std::cout<<"receved."<<std::endl;
     close(clnt_sock);
     close(serv_sock);
-    sleep(2);
+    // sleep(2);
 }
 
 // void Cache::from_single_cache2(int serv_sock){
@@ -543,26 +543,26 @@ void Cache::cache_pass(){
             //     }
             // }
 
-            // for(int i = 0; i < otherPort.size(); i++){
-            //     to_single_cache(otherIP[i], otherPort[i], out_key[i]);
-            // }
+            for(int i = 0; i < otherPort.size(); i++){
+                to_single_cache(otherIP[i], otherPort[i], out_key[i]);
+            }
 
             // for(auto a : otherIP)
             // cout<<otherPort.size()<<endl;
 
-            for(auto pti : pt){
-                cout<<"pti: "<<otherIP[0]<<pti<<endl;
-                sleep(2);
-                int cache_cache_sock = client_socket(otherIP[0], pti);
-                cout<<"cache_cache_sock"<<cache_cache_sock<<endl;
-                for(int i = 0; i < otherPort.size(); i++){
-                    if(pti==otherPort[i]){
-                        std::cout<<"handling cache = "<<i<<std::endl;
-                        std::cout<<"cache = "<<otherIP[i]<<":"<<otherPort[i]<<std::endl;
-                        to_single_cache2(cache_cache_sock, out_key[i]);
-                    }
-                }
-            }
+            // for(auto pti : pt){
+            //     cout<<"pti: "<<otherIP[0]<<pti<<endl;
+            //     sleep(2);
+            //     int cache_cache_sock = client_socket(otherIP[0], pti);
+            //     cout<<"cache_cache_sock"<<cache_cache_sock<<endl;
+            //     for(int i = 0; i < otherPort.size(); i++){
+            //         if(pti==otherPort[i]){
+            //             std::cout<<"handling cache = "<<i<<std::endl;
+            //             std::cout<<"cache = "<<otherIP[i]<<":"<<otherPort[i]<<std::endl;
+            //             to_single_cache2(cache_cache_sock, out_key[i]);
+            //         }
+            //     }
+            // }
 
             //这把锁在to_replica线程里也会被管理，只有那里被解锁之后才能进行exit操作。
             end_mutex.lock();
