@@ -262,7 +262,7 @@ void Cache::Client_chat() {
                 if (len == 0) {
                     epoll_ctl(epfd, EPOLL_CTL_DEL, client_events[i].data.fd, NULL);
                     close(client_events[i].data.fd);
-                    std::cout << "close client:" << client_events[i].data.fd << std::endl;
+//                    std::cout << "close client:" << client_events[i].data.fd << std::endl;
                 }
                 else {
 //                    LRU_handle_task(recv_buff_client, i);
@@ -792,5 +792,5 @@ void addfd(int epollfd, int fd, bool enable_et) {
     // 设置socket为nonblocking模式
     // 执行完就转向下一条指令，不管函数有没有返回。
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFD, 0) | O_NONBLOCK);
-    printf("fd added to epoll!\n\n");
+//    printf("fd added to epoll!\n\n");
 }
