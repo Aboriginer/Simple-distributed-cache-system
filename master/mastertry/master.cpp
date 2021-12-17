@@ -95,10 +95,9 @@ void Master::start_client()
             }
             else
             {
+                bzero(recv_buff_client, BUF_SIZE);
                 int len = recv(client_events[i].data.fd, recv_buff_client, BUF_SIZE, 0);
-                if (len > 0) {
-                    bzero(recv_buff_client, BUF_SIZE);
-                    recv(client_events[i].data.fd, recv_buff_client, BUF_SIZE, 0);
+                if(len > 0){
                     string recv_buff_str = recv_buff_client;
                     string cacheServerAddr = handleClientMessage(recv_buff_str);
                     string send_to_client = "MASTER#" + recv_buff_str + "#" + cacheServerAddr;
@@ -329,6 +328,7 @@ void Master::start_cache()
                         ss << "None";
                     }
                     string str2 = ss.str();
+                    // cout<<"sendmessage:"<<str2<<" to "<< caches_list[client_events[i].data.fd]->ip_cache <<endl;
                     strcpy(send_buff_client, str2.data());
                     send(client_events[i].data.fd, send_buff_client, BUF_SIZE, 0);
                     memset(send_buff_client, 0, sizeof(send_buff_client));
@@ -388,14 +388,14 @@ void Master::shrinkageCapacity()
             while(heartBeatDetect(fd)){
                 continue;
             }
+            // sleep(10);
             if (caches_list[fd]->pair_fd > 0)
             {                                                             //如果有备份cache
                 auto addr1 = caches_list.erase(caches_list[fd]->pair_fd); // 删除缩容的配偶cache
-                // close(caches_list[fd]->pair_fd);                          //关闭配偶的cache通信
+                close(caches_list[fd]->pair_fd);                          //关闭配偶的cache通信
             }
             fd_node.pop_back();
             auto addr = caches_list.erase(fd); //删除主cache
-
             close(fd);                         //关闭主socket
             // 这里有两个问题：
             // 1 删除的信息可能没有同步到其他线程——>需要测试
