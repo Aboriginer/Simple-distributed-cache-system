@@ -27,14 +27,14 @@ void Cache::Start() {
     auto Heartbeat_bind = std::bind(&Cache::Heartbeat,  this);
     auto Client_chat_bind = std::bind(&Cache::Client_chat, this);
     auto Cache_pass_bind = std::bind(&Cache::cache_pass, this);
-    auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
+    // auto Cache_replica_bind = std::bind(&Cache::replica_chat, this);
 
     std::thread for_master_Heartbeat(Heartbeat_bind);
     std::thread for_client(Client_chat_bind);
     std::thread for_cache(Cache_pass_bind);
-    std::thread for_replica(Cache_replica_bind);
+    // std::thread for_replica(Cache_replica_bind);
 
-    for_replica.join();
+    // for_replica.join();
     for_cache.join();
     for_client.join();
     for_master_Heartbeat.join();
@@ -303,6 +303,8 @@ void Cache::Client_chat() {
 
 //向目标IP传递信息
 void Cache::to_single_cache(std::string &ip, std::string &port, std::string &key){
+    sleep(4);
+    std::cout<<"to server cache"<<std::endl;
     int cache_cache_sock = client_socket(ip, port);
 
     char send_buff_master[BUF_SIZE];
@@ -315,6 +317,7 @@ void Cache::to_single_cache(std::string &ip, std::string &port, std::string &key
     send(cache_cache_sock, send_buff_master, BUF_SIZE, 0);
     std::cout<<"message send."<<std::endl;
     bzero(send_buff_master, BUF_SIZE);
+    close(cache_cache_sock);
 }
 
 
@@ -323,8 +326,9 @@ void slice(std::string message, std::string &key, std::string &val){
     while(spear != message.size() && message[spear] != '#'){
         spear ++;
     }
+
     key = message.substr(0, spear);
-    val = message.substr(spear + 1, message.size());
+    val = message.substr(spear + 1, message.size() - spear - 1);
 }
 
 
@@ -336,16 +340,19 @@ void Cache::from_single_cache(std::string &ip, std::string &port){
     std::cout<<"status = "<<status_<<std::endl;
     std::cout<<"from single cache "<<status_<<std::endl;
     if(status_ == "K") return;
+    // std::cout<<""std::endl;
     int serv_sock = server_socket(ip, port);
     int clnt_sock;
     struct sockaddr_in clnt_adr;
     socklen_t clnt_adr_sz;
     clnt_adr_sz = sizeof(clnt_adr);
+    std::cout<<"accepting\n";
     clnt_sock = accept(serv_sock, (struct sockaddr*)&clnt_adr, &clnt_adr_sz);
     std::cout << "client connection from:" << inet_ntoa(clnt_adr.sin_addr) << ":"
                 << ntohs(clnt_adr.sin_port) << ", client_fd = " << clnt_sock << std::endl;
 
-    recv(serv_sock, recv_buff_master, BUF_SIZE, 0);
+    std::cout<<"waiting form message\n";
+    recv(clnt_sock, recv_buff_master, BUF_SIZE, 0);
     std::cout<<"receving message = "<<recv_buff_master<<std::endl;
     std::string key ,val;
     slice(recv_buff_master, key ,val);
@@ -368,7 +375,7 @@ void Cache::ReadFromMaster(std::string message) {
     };
     std::string head = message.substr(0,1);   //P或者R
     // std::cout << "====================ReadFromMaster i:" << i << std::endl;
-    
+    if(status_ == "K") return; 
     if(head == "K"){
         dying_cache_IP_ = part(message, spear, 1);
         dying_cache_Port = part(message, spear, 2);
@@ -376,7 +383,7 @@ void Cache::ReadFromMaster(std::string message) {
         // TODO：这里感觉应该更新完cache_list再把状态改为K
         update_cache(dying_cache_IP_, dying_cache_Port, "K"); // 更新cache_list
         if(dying_cache_IP_ == local_cache_IP_ && dying_cache_Port == port_for_cache_){
-            // std::cout<<"i m dying "<<std::endl;
+            std::cout<<"####i m dying ######"<<std::endl;
             // status_mutex.lock();
             status_ = "K";
             // status_mutex.unlock();
@@ -482,6 +489,11 @@ void Cache::cache_pass(){
             cal_hash_key();
             // out_key.push_back("123");
             std::cout<< "done. size = "<<otherIP.size()<<std::endl;
+            // if(otherIP.size() == 0){
+            //     for(auto it : cache_list){
+            //         to_single_cache(cache_list.first, cache_list.second,)
+            //     }
+            // }
             for(int i = 0; i < otherIP.size(); i++){
                 std::cout<<"handling cache = "<<i<<std::endl;
                 std::cout<<"cache = "<<otherIP[i]<<":"<<otherPort[i]<<std::endl;
@@ -500,6 +512,7 @@ void Cache::cache_pass(){
             }
             std::cout<<"cache = "<<dying_cache_IP_<<" "<<dying_cache_Port<<std::endl;
             if(status_ == "P"){
+                std::cout<<"listening ..."<<std::endl;
                 from_single_cache(local_cache_IP_, port_for_cache_);
                 cache_list_update_flag = true;
                 std::cout<<"cache_list_update_flag == "<< (cache_list_update_flag ? "true" : "false") <<std::endl;
@@ -714,11 +727,13 @@ void Cache::cal_hash_key() {
     std::vector<std::string> caches;
     ConsistentHash cache_hash;
     for(auto it : cache_list){
-        std::string single = it.first + it.second;
+        std::string single = it.first +"#"+ it.second;
         caches.push_back(single);
     }
     std::cout<<"cache_list_size = "<<cache_list.size()<<std::endl;
     cache_hash.initialize(caches.size(), 100);
+    MainCache.put("1","a");
+    MainCache.put("2","b");
     std::vector<std::string> all_keys = MainCache.all_key();
     std::cout<<"cache_list_size = "<<all_keys.size()<<std::endl;
     std::vector<size_t> all_index;
@@ -780,7 +795,7 @@ int server_socket(std::string server_IP, std::string server_port) {
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "Start to listen client" << std::endl;
+    std::cout << "Start to listen client " << std::endl;
 
     return serv_sock;
 }
@@ -790,7 +805,7 @@ int client_socket(std::string server_IP, std::string server_port) {
     int str_len;
 
     struct sockaddr_in serv_adr;
-
+    std::cout<<"connecting\n";
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         fprintf(stderr, "Socket Error is %s\n", strerror(errno));
         exit(EXIT_FAILURE);
