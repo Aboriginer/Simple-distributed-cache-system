@@ -95,16 +95,19 @@ void Master::start_client()
             }
             else
             {
-                bzero(recv_buff_client, BUF_SIZE);
-                recv(client_events[i].data.fd, recv_buff_client, BUF_SIZE, 0);
-                string recv_buff_str = recv_buff_client;
-                string cacheServerAddr = handleClientMessage(recv_buff_str);
-                string send_to_client = "MASTER#" + recv_buff_str + "#" + cacheServerAddr;
-                strcpy(send_buff_client, send_to_client.c_str()); //CacheSever IP
-                send(client_events[i].data.fd, send_buff_client, BUF_SIZE, 0);
+                int len = recv(client_events[i].data.fd, recv_buff_client, BUF_SIZE, 0);
+                if (len > 0) {
+                    bzero(recv_buff_client, BUF_SIZE);
+                    recv(client_events[i].data.fd, recv_buff_client, BUF_SIZE, 0);
+                    string recv_buff_str = recv_buff_client;
+                    string cacheServerAddr = handleClientMessage(recv_buff_str);
+                    string send_to_client = "MASTER#" + recv_buff_str + "#" + cacheServerAddr;
+                    strcpy(send_buff_client, send_to_client.c_str()); //CacheSever IP
+                    send(client_events[i].data.fd, send_buff_client, BUF_SIZE, 0);
 
-                memset(recv_buff_client, 0, sizeof(recv_buff_client));
-                memset(send_buff_client, 0, sizeof(send_buff_client));
+                    memset(recv_buff_client, 0, sizeof(recv_buff_client));
+                    memset(send_buff_client, 0, sizeof(send_buff_client));
+                }
             }
         }
     }
