@@ -396,6 +396,9 @@ void Master::shrinkageCapacity()
             }
             fd_node.pop_back();
             auto addr = caches_list.erase(fd); //删除主cache
+
+            // cout<<"cache_list.size()"<<caches_list.size()<<endl;
+            // cout<<"fd.size()"<<fd.size()<<endl;
             close(fd);                         //关闭主socket
             // 这里有两个问题：
             // 1 删除的信息可能没有同步到其他线程——>需要测试
@@ -406,6 +409,10 @@ void Master::shrinkageCapacity()
         }
         else if (c == 'c')
         {
+            // for (auto fd : fd_node)
+            // {
+            //     cout << fd << " is ====." << endl;
+            // }
             for (auto cache : caches_list)
             {
                 cout << cache.second->ip_cache << " is active." << endl;

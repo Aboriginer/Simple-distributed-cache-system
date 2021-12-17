@@ -321,6 +321,23 @@ void Cache::to_single_cache(std::string &ip, std::string &port, std::string &key
 }
 
 
+void Cache::to_single_cache2(int cache_cache_sock, std::string &key){
+    // sleep(4);
+    std::cout<<"to server cache"<<std::endl;
+    // int cache_cache_sock = client_socket(ip, port);
+
+    char send_buff_master[BUF_SIZE];
+    // Master返回的扩缩容信息
+    bzero(send_buff_master, BUF_SIZE);
+    std::string val = MainCache.get(key);
+    std::string message = key + "#" + val;
+    strcpy(send_buff_master, message.data());
+    std::cout<<"sending message = "<<send_buff_master<<std::endl;
+    send(cache_cache_sock, send_buff_master, BUF_SIZE, 0);
+    std::cout<<"message send."<<std::endl;
+    bzero(send_buff_master, BUF_SIZE);
+    close(cache_cache_sock);
+}
 void slice(std::string message, std::string &key, std::string &val){
     int spear = 0;
     while(spear != message.size() && message[spear] != '#'){
@@ -360,9 +377,40 @@ void Cache::from_single_cache(std::string &ip, std::string &port){
     std::cout<<key<<" "<<val<<std::endl;
     MainCache.put(key, val);
     std::cout<<"receved."<<std::endl;
+    close(clnt_sock);
+    close(serv_sock);
+    sleep(2);
 }
 
+// void Cache::from_single_cache2(int serv_sock){
+    
+//     char recv_buff_master[BUF_SIZE];
+//     std::cout<<"status = "<<status_<<std::endl;
+//     std::cout<<"from single cache "<<status_<<std::endl;
+//     if(status_ == "K") return;
+//     // std::cout<<""std::endl;
+//     // int serv_sock = server_socket(ip, port);
+//     int clnt_sock;
+//     struct sockaddr_in clnt_adr;
+//     socklen_t clnt_adr_sz;
+//     clnt_adr_sz = sizeof(clnt_adr);
+//     std::cout<<"accepting\n";
+//     clnt_sock = accept(serv_sock, (struct sockaddr*)&clnt_adr, &clnt_adr_sz);
+//     std::cout << "client connection from:" << inet_ntoa(clnt_adr.sin_addr) << ":"
+//                 << ntohs(clnt_adr.sin_port) << ", client_fd = " << clnt_sock << std::endl;
 
+//     std::cout<<"waiting form message\n";
+//     recv(clnt_sock, recv_buff_master, BUF_SIZE, 0);
+//     std::cout<<"receving message = "<<recv_buff_master<<std::endl;
+//     std::string key ,val;
+//     slice(recv_buff_master, key ,val);
+//     std::cout<<"putting key & val :"<<std::endl;
+//     std::cout<<key<<" "<<val<<std::endl;
+//     MainCache.put(key, val);
+//     std::cout<<"receved."<<std::endl;
+//     close(clnt_sock);
+//     sleep(2);
+// }
 void Cache::ReadFromMaster(std::string message) {
     int spear = 2;
     while (message.size() && spear != message.size() && message[spear] != '#') {
@@ -494,17 +542,35 @@ void Cache::cache_pass(){
             //         to_single_cache(cache_list.first, cache_list.second,)
             //     }
             // }
-            for(int i = 0; i < otherIP.size(); i++){
-                std::cout<<"handling cache = "<<i<<std::endl;
-                std::cout<<"cache = "<<otherIP[i]<<":"<<otherPort[i]<<std::endl;
-                to_single_cache(otherIP[i], otherPort[i], out_key[i]);
+
+            // for(int i = 0; i < otherPort.size(); i++){
+            //     to_single_cache(otherIP[i], otherPort[i], out_key[i]);
+            // }
+
+            // for(auto a : otherIP)
+            // cout<<otherPort.size()<<endl;
+
+            for(auto pti : pt){
+                cout<<"pti: "<<otherIP[0]<<pti<<endl;
+                sleep(2);
+                int cache_cache_sock = client_socket(otherIP[0], pti);
+                cout<<"cache_cache_sock"<<cache_cache_sock<<endl;
+                for(int i = 0; i < otherPort.size(); i++){
+                    if(pti==otherPort[i]){
+                        std::cout<<"handling cache = "<<i<<std::endl;
+                        std::cout<<"cache = "<<otherIP[i]<<":"<<otherPort[i]<<std::endl;
+                        to_single_cache2(cache_cache_sock, out_key[i]);
+                    }
+                }
             }
+
             //这把锁在to_replica线程里也会被管理，只有那里被解锁之后才能进行exit操作。
             end_mutex.lock();
     //        std::cout << "?????????????????????????????exit" << std::endl;
             exit(0);
             end_mutex.unlock();
-        }else if(status_ == "P"){
+        }
+        else if(status_ == "P"){
             
             if(dying_cache_IP_.size() == 0 || dying_cache_Port.size() == 0){
                 // std::cout<<"nth"<<std::endl;
@@ -513,6 +579,7 @@ void Cache::cache_pass(){
             std::cout<<"cache = "<<dying_cache_IP_<<" "<<dying_cache_Port<<std::endl;
             if(status_ == "P"){
                 std::cout<<"listening ..."<<std::endl;
+    // int serv_sock = server_socket(local_cache_IP_, port_for_cache_);
                 from_single_cache(local_cache_IP_, port_for_cache_);
                 cache_list_update_flag = true;
                 std::cout<<"cache_list_update_flag == "<< (cache_list_update_flag ? "true" : "false") <<std::endl;
@@ -732,8 +799,8 @@ void Cache::cal_hash_key() {
     }
     std::cout<<"cache_list_size = "<<cache_list.size()<<std::endl;
     cache_hash.initialize(caches.size(), 100);
-    MainCache.put("1","a");
-    MainCache.put("2","b");
+    // MainCache.put("1","a");
+    // MainCache.put("2","b");
     std::vector<std::string> all_keys = MainCache.all_key();
     std::cout<<"cache_list_size = "<<all_keys.size()<<std::endl;
     std::vector<size_t> all_index;
@@ -747,6 +814,7 @@ void Cache::cal_hash_key() {
         slice(target_cache, ip, port);
         otherIP.push_back(ip);
         otherPort.push_back(port);
+        pt.insert(port);
     }
 
     out_key = all_keys;
@@ -784,6 +852,11 @@ int server_socket(std::string server_IP, std::string server_port) {
     }
 
 //    std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>server port:" << server_port << std::endl;
+    int val = 1;
+    if (setsockopt(serv_sock, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(int)) < 0) {
+        std::cout << "setsockopt error" << std::endl;
+        exit(1);
+    }
     if (bind(serv_sock, (struct sockaddr *) &serv_adr, sizeof(serv_adr)) == -1) {
         fprintf(stderr, "bind error\n");
         printf("Error code: %d\n", errno);

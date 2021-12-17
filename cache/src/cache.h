@@ -26,6 +26,7 @@
 #include "threadPool.hpp"
 #include "Timer.hpp"
 #include "ConsistentHash.hpp"
+#include <set>
 // 缓冲区大小65535
 #define BUF_SIZE 0xFFFF
 
@@ -61,6 +62,8 @@ public:
     void Start();
 
 private:
+void from_single_cache2(int serv_sock);
+    void to_single_cache2(int cache_cache_sock, std::string &key);
     ConsistentHash hash_maker;
     std::atomic<int> is_initialed;
     LRU_Cache<std::string, std::string> MainCache;
@@ -114,6 +117,7 @@ private:
     bool initial_flag;
     // TODO：测试用，待删除
     // int i = 0;
+    set<std::string> pt;
 };
 
 void addfd( int epollfd, int fd, bool enable_et );
